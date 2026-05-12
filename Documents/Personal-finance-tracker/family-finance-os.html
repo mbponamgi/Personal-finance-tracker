@@ -1,0 +1,2848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family Finance OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── THEME ── */
+:root {
+  --bg: #f5f2ee;
+  --surface: #ffffff;
+  --surface2: #f0ece6;
+  --border: #e2dbd2;
+  --border2: #d0c8bc;
+  --accent: #b5813a;
+  --accent-light: rgba(181,129,58,.10);
+  --accent2: #4a7c6f;
+  --accent2-light: rgba(74,124,111,.10);
+  --accent3: #7b5ea7;
+  --accent3-light: rgba(123,94,167,.10);
+  --green: #3a7d54;
+  --green-light: rgba(58,125,84,.10);
+  --red: #c0392b;
+  --red-light: rgba(192,57,43,.10);
+  --orange: #c0692b;
+  --orange-light: rgba(192,105,43,.10);
+  --text: #1e1a16;
+  --text2: #4a4540;
+  --muted: #8a8279;
+  --subtle: #c8c0b6;
+
+  /* member colors */
+  --m-madhu:   #b5813a;
+  --m-sailaja: #4a7c6f;
+  --m-parents: #7b5ea7;
+  --m-charan:  #3a7d54;
+  --m-himaja:  #c0692b;
+  --m-family:  #4a6fa5;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-weight:400;min-height:100vh;overflow-x:hidden;}
+
+/* ── SIDEBAR ── */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:236px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;overflow-y:auto;}
+.logo-wrap{padding:22px 22px 18px;border-bottom:1px solid var(--border);}
+.logo-name{font-family:'Lora',serif;font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.01em;}
+.logo-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-top:3px;}
+
+/* member switcher */
+.member-bar{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:5px;}
+.member-chip{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:1.5px solid transparent;transition:all .15s;white-space:nowrap;}
+.member-chip.active{color:#fff;}
+.mc-all   {background:#4a6fa5;border-color:#4a6fa5;color:#fff;}
+.mc-madhu {--mc:#b5813a;}
+.mc-sailaja{--mc:#4a7c6f;}
+.mc-parents{--mc:#7b5ea7;}
+.mc-charan{--mc:#3a7d54;}
+.mc-himaja{--mc:#c0692b;}
+.member-chip:not(.mc-all){background:rgba(0,0,0,.04);color:var(--text2);border-color:var(--border);}
+.member-chip:not(.mc-all):hover{background:color-mix(in srgb,var(--mc) 12%,transparent);border-color:var(--mc);color:var(--mc);}
+.member-chip:not(.mc-all).active{background:var(--mc);border-color:var(--mc);color:#fff;}
+
+.nav{padding:10px 0;flex:1;}
+.nav-section{margin-bottom:2px;}
+.nav-label{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;padding:8px 22px 4px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 18px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;border-left:2.5px solid transparent;margin:1px 0;}
+.nav-item:hover{color:var(--text);background:var(--surface2);}
+.nav-item.active{color:var(--accent);background:var(--accent-light);border-left-color:var(--accent);font-weight:500;}
+.nav-icon{font-size:13px;width:16px;text-align:center;flex-shrink:0;}
+
+.sidebar-footer{padding:12px 22px;border-top:1px solid var(--border);}
+.last-saved{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.08em;}
+
+/* ── MAIN ── */
+.main{margin-left:236px;min-height:100vh;}
+.topbar{padding:16px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(245,242,238,.92);backdrop-filter:blur(10px);position:sticky;top:0;z-index:90;}
+.page-title{font-family:'Lora',serif;font-size:20px;font-weight:600;color:var(--text);}
+.member-context{font-size:12px;color:var(--muted);margin-top:1px;}
+.topbar-right{display:flex;gap:8px;align-items:center;}
+.btn{padding:7px 14px;border-radius:8px;font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--surface);color:var(--text2);font-weight:400;}
+.btn:hover{border-color:var(--border2);color:var(--text);}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:500;}
+.btn-primary:hover{background:#c49040;}
+.btn-danger{background:var(--red-light);color:var(--red);border-color:rgba(192,57,43,.25);}
+.btn-danger:hover{background:rgba(192,57,43,.18);}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.content{padding:24px 32px;}
+
+/* ── VIEWS ── */
+.view{display:none;animation:fadeIn .2s ease;}
+.view.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── SUMMARY CARDS ── */
+.summary-grid{display:grid;gap:12px;margin-bottom:20px;}
+.g2{grid-template-columns:repeat(2,1fr);}
+.g3{grid-template-columns:repeat(3,1fr);}
+.g4{grid-template-columns:repeat(4,1fr);}
+.g5{grid-template-columns:repeat(5,1fr);}
+.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;}
+.summary-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;}
+.card-gold::after{background:linear-gradient(90deg,var(--accent),transparent);}
+.card-teal::after{background:linear-gradient(90deg,var(--accent2),transparent);}
+.card-purple::after{background:linear-gradient(90deg,var(--accent3),transparent);}
+.card-green::after{background:linear-gradient(90deg,var(--green),transparent);}
+.card-red::after{background:linear-gradient(90deg,var(--red),transparent);}
+.card-orange::after{background:linear-gradient(90deg,var(--orange),transparent);}
+.card-blue::after{background:linear-gradient(90deg,#4a6fa5,transparent);}
+.card-label{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.16em;text-transform:uppercase;margin-bottom:6px;}
+.card-value{font-family:'DM Mono',monospace;font-size:21px;font-weight:500;letter-spacing:-.02em;color:var(--text);}
+.card-value.gold{color:var(--accent);}
+.card-value.teal{color:var(--accent2);}
+.card-value.purple{color:var(--accent3);}
+.card-value.positive{color:var(--green);}
+.card-value.negative{color:var(--red);}
+.card-value.orange{color:var(--orange);}
+.card-value.blue{color:#4a6fa5;}
+.card-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+.card-delta{font-family:'DM Mono',monospace;font-size:10px;margin-top:6px;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;}
+.delta-up{color:var(--green);background:var(--green-light);}
+.delta-down{color:var(--red);background:var(--red-light);}
+
+/* ── PANEL ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.panel:last-child{margin-bottom:0;}
+.panel-header{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.panel-title{font-family:'Lora',serif;font-size:14px;font-weight:600;color:var(--text);}
+.panel-actions{display:flex;gap:6px;align-items:center;}
+.panel-action{font-size:11px;color:var(--accent);cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:.04em;background:none;border:1px solid transparent;padding:3px 8px;border-radius:6px;transition:all .15s;}
+.panel-action:hover{background:var(--accent-light);border-color:rgba(181,129,58,.2);}
+.panel-body{padding:16px 18px;}
+
+/* ── GRID LAYOUTS ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;}
+.col-7-5{display:grid;grid-template-columns:7fr 5fr;gap:16px;margin-bottom:16px;}
+
+/* ── ROWS ── */
+.data-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.data-row:last-child{border-bottom:none;padding-bottom:0;}
+.data-row:first-child{padding-top:0;}
+.row-left{display:flex;align-items:center;gap:10px;}
+.row-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.row-name{font-size:13px;font-weight:500;color:var(--text);}
+.row-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.row-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--text);}
+.row-val.negative{color:var(--red);}
+.row-val.positive{color:var(--green);}
+.row-right{text-align:right;}
+
+/* ── MEMBER TAG ── */
+.member-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
+.tag-madhu  {background:rgba(181,129,58,.12);color:var(--m-madhu);}
+.tag-sailaja{background:rgba(74,124,111,.12);color:var(--m-sailaja);}
+.tag-parents{background:rgba(123,94,167,.12);color:var(--m-parents);}
+.tag-charan {background:rgba(58,125,84,.12);color:var(--m-charan);}
+.tag-himaja {background:rgba(192,105,43,.12);color:var(--m-himaja);}
+.tag-joint  {background:rgba(74,111,165,.12);color:var(--m-family);}
+
+/* ── TABLE ── */
+.data-table{width:100%;border-collapse:collapse;}
+.data-table th{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;text-align:left;padding:0 8px 9px;border-bottom:1px solid var(--border);}
+.data-table td{padding:10px 8px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text);}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table td:last-child,.data-table th:last-child{text-align:right;}
+.data-table tr:hover td{background:var(--surface2);}
+
+/* ── PROGRESS ── */
+.progress-wrap{margin:8px 0;}
+.progress-label{display:flex;justify-content:space-between;margin-bottom:5px;font-size:11px;color:var(--muted);}
+.progress-bar{height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:3px;transition:width .6s ease;}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;}
+.badge-success{background:var(--green-light);color:var(--green);}
+.badge-warn{background:var(--accent-light);color:var(--accent);}
+.badge-danger{background:var(--red-light);color:var(--red);}
+.badge-neutral{background:var(--surface2);color:var(--muted);}
+.badge-purple{background:var(--accent3-light);color:var(--accent3);}
+.badge-teal{background:var(--accent2-light);color:var(--accent2);}
+
+/* ── ALERTS ── */
+.alert{border-radius:10px;padding:10px 13px;margin-bottom:9px;font-size:12px;display:flex;align-items:flex-start;gap:9px;border:1px solid;line-height:1.55;color:var(--text2);}
+.alert:last-child{margin-bottom:0;}
+.alert-warn{background:var(--accent-light);border-color:rgba(181,129,58,.25);}
+.alert-info{background:var(--accent2-light);border-color:rgba(74,124,111,.25);}
+.alert-success{background:var(--green-light);border-color:rgba(58,125,84,.25);}
+.alert-danger{background:var(--red-light);border-color:rgba(192,57,43,.25);}
+
+/* ── PROPERTY CARDS ── */
+.prop-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;transition:box-shadow .15s;}
+.prop-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.06);}
+.prop-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}
+.prop-type-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-family:'DM Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;}
+.prop-flat{background:rgba(74,111,165,.1);color:#4a6fa5;}
+.prop-house{background:var(--accent-light);color:var(--accent);}
+.prop-plot{background:var(--green-light);color:var(--green);}
+.prop-commercial{background:var(--accent2-light);color:var(--accent2);}
+.prop-agri{background:var(--accent3-light);color:var(--accent3);}
+.prop-name{font-size:14px;font-weight:600;color:var(--text);margin-top:5px;}
+.prop-location{font-size:11px;color:var(--muted);}
+.prop-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+.prop-meta-item .prop-meta-label{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-bottom:3px;}
+.prop-meta-item .prop-meta-val{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--text);}
+.prop-gain{color:var(--green);}
+.prop-loss{color:var(--red);}
+.prop-actions{display:flex;gap:6px;margin-top:10px;}
+
+/* ── LOAN CARDS ── */
+.loan-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;}
+.loan-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+.loan-type{display:inline-flex;padding:3px 10px;border-radius:20px;font-family:'DM Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;}
+.loan-home{background:var(--accent-light);color:var(--accent);}
+.loan-car{background:var(--accent2-light);color:var(--accent2);}
+.loan-personal{background:var(--accent3-light);color:var(--accent3);}
+.loan-education{background:var(--green-light);color:var(--green);}
+.loan-other{background:var(--surface2);color:var(--muted);}
+.loan-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;}
+.loan-meta-label{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;}
+.loan-meta-val{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;}
+.emi-bar{margin-top:12px;}
+
+/* ── GOLD CARDS ── */
+.gold-item{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);}
+.gold-item:last-child{border-bottom:none;}
+.gold-item-left{display:flex;align-items:center;gap:10px;}
+
+/* ── BUDGET ── */
+.budget-row{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
+.budget-label{font-size:12px;color:var(--text2);width:130px;flex-shrink:0;}
+.budget-bars{flex:1;}
+.budget-bar-wrap{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;position:relative;}
+.budget-bar-budget{height:100%;border-radius:3px;background:var(--border2);position:absolute;top:0;left:0;}
+.budget-bar-actual{height:100%;border-radius:3px;position:absolute;top:0;left:0;}
+.budget-vals{display:flex;justify-content:space-between;margin-top:3px;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);}
+.budget-pct{font-family:'DM Mono',monospace;font-size:11px;width:40px;text-align:right;flex-shrink:0;}
+
+/* ── NW CHART ── */
+.nw-chart-wrap{height:100px;position:relative;}
+svg.sparkline{width:100%;height:100%;overflow:visible;}
+
+/* ── TAX ROWS ── */
+.tax-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.tax-row:last-child{border-bottom:none;}
+.tax-key{color:var(--text2);}
+.tax-val{font-family:'DM Mono',monospace;font-weight:500;color:var(--text);}
+
+/* ── INSURANCE ── */
+.ins-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;}
+.ins-card:hover{border-color:var(--border2);}
+.ins-type-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-family:'DM Mono',monospace;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;}
+.ins-life{background:var(--accent-light);color:var(--accent);}
+.ins-health{background:var(--green-light);color:var(--green);}
+.ins-auto{background:var(--accent2-light);color:var(--accent2);}
+.ins-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;}
+.ins-meta-label{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;}
+.ins-meta-val{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;}
+.ins-due-soon{border-color:rgba(181,129,58,.4);background:rgba(181,129,58,.04);}
+.ins-overdue{border-color:rgba(192,57,43,.4);background:rgba(192,57,43,.04);}
+
+/* ── MODALS ── */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center;}
+.modal-backdrop.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;width:540px;max-width:95vw;max-height:88vh;overflow-y:auto;position:relative;animation:modalIn .2s ease;box-shadow:0 12px 40px rgba(0,0,0,.12);}
+.modal-lg{width:660px;}
+@keyframes modalIn{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-title{font-family:'Lora',serif;font-size:17px;font-weight:600;margin-bottom:18px;color:var(--text);}
+.modal-close{position:absolute;top:14px;right:14px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:color .15s;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}
+
+/* ── FORMS ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+.form-full{grid-column:1/-1;}
+.form-group{display:flex;flex-direction:column;gap:4px;}
+.form-label{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;}
+.form-input,.form-select{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 11px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;transition:border-color .15s;outline:none;width:100%;}
+.form-input:focus,.form-select:focus{border-color:var(--accent);background:var(--surface);}
+.form-select option{background:var(--surface);}
+.divider{height:1px;background:var(--border);margin:14px 0;}
+
+/* ── IMPORT ── */
+.import-zone{border:1.5px dashed var(--border2);border-radius:12px;padding:26px;text-align:center;cursor:pointer;transition:all .15s;color:var(--muted);font-size:13px;}
+.import-zone:hover{border-color:var(--accent);color:var(--text);}
+.bank-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px;}
+.bank-tab{padding:5px 13px;border-radius:7px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;cursor:pointer;border:1px solid var(--border);background:none;color:var(--muted);transition:all .12s;}
+.bank-tab.active{color:var(--accent);border-color:rgba(181,129,58,.35);background:var(--accent-light);}
+.bank-tab:hover:not(.active){color:var(--text);border-color:var(--border2);}
+.parse-preview{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px;margin-top:12px;max-height:200px;overflow-y:auto;}
+.parse-row{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:10px;}
+.parse-row:last-child{border-bottom:none;}
+.parse-cell{flex:1;color:var(--muted);font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.parse-cell.val{color:var(--text);}
+.parse-header{color:var(--accent)!important;font-weight:500;}
+.parse-status{display:inline-flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:6px;}
+.parse-ok{background:var(--green-light);color:var(--green);}
+.parse-err{background:var(--red-light);color:var(--red);}
+
+/* ── SPEND BARS ── */
+.spend-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+.spend-label{font-size:12px;color:var(--text2);width:130px;flex-shrink:0;}
+.spend-bar-wrap{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+.spend-bar-fill{height:100%;border-radius:3px;}
+.spend-val{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);width:80px;text-align:right;}
+
+/* ── TXN ROWS ── */
+.txn-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
+.txn-row:last-child{border-bottom:none;}
+.txn-left{display:flex;align-items:center;gap:9px;}
+.txn-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.txn-name{font-size:12px;font-weight:500;color:var(--text);}
+.txn-cat{font-size:10px;color:var(--muted);margin-top:1px;}
+.txn-amount{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;}
+.txn-amount.debit{color:var(--red);}
+.txn-amount.credit{color:var(--green);}
+
+/* ── MINI STATS ── */
+.mini-stats{display:flex;gap:16px;margin-top:8px;}
+.mini-stat-label{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;}
+.mini-stat-val{font-family:'DM Mono',monospace;font-size:13px;margin-top:2px;color:var(--text);}
+.mini-stat-val.positive{color:var(--green);}
+.mini-stat-val.negative{color:var(--red);}
+
+/* ── EMPTY ── */
+.empty-state{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;}
+.empty-icon{font-size:24px;margin-bottom:7px;opacity:.5;}
+
+/* ── REWARD ── */
+.reward-pts{font-family:'DM Mono',monospace;font-size:20px;color:var(--accent);font-weight:500;}
+.reward-val{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+/* SECTION DIVIDER */
+.section-head{font-family:'Lora',serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:12px;margin-top:4px;}
+</style>
+</head>
+<body>
+
+<!-- ══════════ SIDEBAR ══════════ -->
+<nav class="sidebar">
+  <div class="logo-wrap">
+    <div class="logo-name">Family Finance OS</div>
+    <div class="logo-sub">FY 2025–26</div>
+  </div>
+
+  <!-- Member Switcher -->
+  <div class="member-bar">
+    <div class="member-chip mc-all active" data-member="all" onclick="setMember('all',this)">All</div>
+    <div class="member-chip mc-madhu" data-member="madhu" onclick="setMember('madhu',this)">Madhu</div>
+    <div class="member-chip mc-sailaja" data-member="sailaja" onclick="setMember('sailaja',this)">Sailaja</div>
+    <div class="member-chip mc-parents" data-member="parents" onclick="setMember('parents',this)">Parents</div>
+    <div class="member-chip mc-charan" data-member="charan" onclick="setMember('charan',this)">Charan</div>
+    <div class="member-chip mc-himaja" data-member="himaja" onclick="setMember('himaja',this)">Himaja</div>
+  </div>
+
+  <div class="nav">
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item active" onclick="go('overview')"><span class="nav-icon">◈</span>Dashboard</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Accounts</div>
+      <div class="nav-item" onclick="go('accounts')"><span class="nav-icon">⬡</span>Bank Accounts</div>
+      <div class="nav-item" onclick="go('cards')"><span class="nav-icon">▭</span>Credit Cards</div>
+      <div class="nav-item" onclick="go('rewards')"><span class="nav-icon">◇</span>Reward Points</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Assets</div>
+      <div class="nav-item" onclick="go('property')"><span class="nav-icon">⌂</span>Property</div>
+      <div class="nav-item" onclick="go('gold')"><span class="nav-icon">◎</span>Gold &amp; Jewellery</div>
+      <div class="nav-item" onclick="go('investments')"><span class="nav-icon">↗</span>Investments</div>
+      <div class="nav-item" onclick="go('epf')"><span class="nav-icon">⬟</span>EPF</div>
+      <div class="nav-item" onclick="go('nps')"><span class="nav-icon">⬠</span>NPS</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Liabilities</div>
+      <div class="nav-item" onclick="go('loans')"><span class="nav-icon">≈</span>Loans &amp; EMI</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Protection</div>
+      <div class="nav-item" onclick="go('insurance')"><span class="nav-icon">⛨</span>Insurance</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Planning</div>
+      <div class="nav-item" onclick="go('budget')"><span class="nav-icon">⊞</span>Budget vs Actuals</div>
+      <div class="nav-item" onclick="go('tax')"><span class="nav-icon">≋</span>Tax Tracker</div>
+      <div class="nav-item" onclick="go('transactions')"><span class="nav-icon">≡</span>Transactions</div>
+      <div class="nav-item" onclick="go('import')"><span class="nav-icon">⤓</span>Import Statement</div>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="last-saved" id="lastUpdated">Not yet saved</div>
+  </div>
+</nav>
+
+<!-- ══════════ MAIN ══════════ -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div id="pageTitle" class="page-title">Dashboard</div>
+      <div class="member-context" id="memberContext">Family — All Members</div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn" onclick="go('import')">⤓ Import</button>
+      <button class="btn btn-primary" onclick="ctxAdd()">+ Add Entry</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══════════ OVERVIEW ══════════ -->
+    <div class="view active" id="view-overview">
+      <div class="summary-grid g5">
+        <div class="summary-card card-gold">
+          <div class="card-label">Net Worth</div>
+          <div class="card-value gold" id="ov-nw">₹0</div>
+          <div class="card-sub">Total Assets − Liabilities</div>
+          <div class="card-delta delta-up" id="ov-nw-delta" style="display:none"></div>
+        </div>
+        <div class="summary-card card-teal">
+          <div class="card-label">Liquid Balance</div>
+          <div class="card-value teal" id="ov-liquid">₹0</div>
+          <div class="card-sub">Banks + Savings</div>
+        </div>
+        <div class="summary-card card-blue">
+          <div class="card-label">Property Value</div>
+          <div class="card-value blue" id="ov-prop">₹0</div>
+          <div class="card-sub">Market value</div>
+        </div>
+        <div class="summary-card card-purple">
+          <div class="card-label">Investments</div>
+          <div class="card-value purple" id="ov-inv">₹0</div>
+          <div class="card-sub">MF · Stocks · FD · Gold</div>
+        </div>
+        <div class="summary-card card-red">
+          <div class="card-label">Total Liabilities</div>
+          <div class="card-value negative" id="ov-liab">₹0</div>
+          <div class="card-sub">Loans + Cards</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Net Worth Trend</span></div>
+          <div class="panel-body">
+            <div class="nw-chart-wrap">
+              <svg class="sparkline" id="nwChart" viewBox="0 0 400 100" preserveAspectRatio="none">
+                <defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b5813a" stop-opacity=".2"/><stop offset="100%" stop-color="#b5813a" stop-opacity="0"/></linearGradient></defs>
+                <path id="nwFill" d="" fill="url(#grad)"/>
+                <path id="nwLine" d="" fill="none" stroke="#b5813a" stroke-width="1.5"/>
+                <g id="nwDots"></g>
+              </svg>
+            </div>
+            <div id="nwLabels" style="display:flex;justify-content:space-between;margin-top:4px;"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Alerts &amp; Nudges</span></div>
+          <div class="panel-body" id="ov-alerts">
+            <div class="alert alert-info"><span>ℹ</span><span>Add your balances to get started.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="three-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Asset Breakdown</span></div>
+          <div class="panel-body" id="ov-assets-breakdown">
+            <div class="empty-state"><div class="empty-icon">◈</div>Add assets to see breakdown</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Loans &amp; EMI</span><button class="panel-action" onclick="go('loans')">View all →</button></div>
+          <div class="panel-body" id="ov-loans-mini">
+            <div class="empty-state"><div class="empty-icon">≈</div>No loans</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Insurance Due Soon</span><button class="panel-action" onclick="go('insurance')">View all →</button></div>
+          <div class="panel-body" id="ov-insurance">
+            <div class="empty-state"><div class="empty-icon">⛨</div>No policies</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="two-col" style="margin-bottom:0">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Monthly Spend by Category</span></div>
+          <div class="panel-body" id="ov-spend">
+            <div class="empty-state"><div class="empty-icon">≋</div>No transactions this month</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Member Net Worth</span></div>
+          <div class="panel-body" id="ov-member-nw">
+            <div class="empty-state"><div class="empty-icon">◈</div>Add data to see member breakdown</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ ACCOUNTS ══════════ -->
+    <div class="view" id="view-accounts">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Bank Accounts</span>
+          <button class="btn btn-primary btn-sm" onclick="openModal('accModal')">+ Add Account</button>
+        </div>
+        <div class="panel-body" id="acc-list">
+          <div class="empty-state"><div class="empty-icon">⬡</div>No accounts added</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ CARDS ══════════ -->
+    <div class="view" id="view-cards">
+      <div class="summary-grid g3">
+        <div class="summary-card card-red"><div class="card-label">Total Outstanding</div><div class="card-value negative" id="cards-total">₹0</div></div>
+        <div class="summary-card card-gold"><div class="card-label">MTD Spend (Cards)</div><div class="card-value gold" id="cards-mtd">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Combined Limit</div><div class="card-value teal" id="cards-limit">₹0</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Credit Cards</span>
+          <button class="btn btn-primary btn-sm" onclick="openModal('cardModal')">+ Add Card</button>
+        </div>
+        <div class="panel-body" id="card-list">
+          <div class="empty-state"><div class="empty-icon">▭</div>No cards added</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ REWARDS ══════════ -->
+    <div class="view" id="view-rewards">
+      <div class="summary-grid g3">
+        <div class="summary-card card-gold"><div class="card-label">Total Points Value</div><div class="card-value gold" id="rw-total-val">₹0</div><div class="card-sub">Est. redemption value</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Amex MR Points</div><div class="card-value teal" id="rw-amex-pts">0</div></div>
+        <div class="summary-card card-purple"><div class="card-label">ICICI Reward Points</div><div class="card-value purple" id="rw-icici-pts">0</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">American Express MR</span><button class="panel-action" onclick="openRewardModal('amex')">Update</button></div>
+          <div class="panel-body">
+            <div class="reward-pts" id="rw-amex-big">0</div>
+            <div class="reward-val" id="rw-amex-val">≈ ₹0 value</div>
+            <div class="divider"></div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.8">
+              <div>Best: Air India miles (1:1), Taj vouchers</div>
+              <div>Transfer to IndiGo for domestic travel value</div>
+            </div>
+            <div style="margin-top:10px"><div class="card-label" style="margin-bottom:4px">Tier</div><div id="rw-amex-tier" style="font-family:'DM Mono',monospace;font-size:13px;color:var(--accent)">—</div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">ICICI Reward Points</span><button class="panel-action" onclick="openRewardModal('icici-cc')">Update</button></div>
+          <div class="panel-body">
+            <div class="reward-pts" id="rw-icici-big">0</div>
+            <div class="reward-val" id="rw-icici-val">≈ ₹0 value</div>
+            <div class="divider"></div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.8">
+              <div>Best: Flipkart vouchers, flight bookings</div>
+              <div>1 ICICI point ≈ ₹0.25 average</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ PROPERTY ══════════ -->
+    <div class="view" id="view-property">
+      <div class="summary-grid g4">
+        <div class="summary-card card-blue"><div class="card-label">Total Market Value</div><div class="card-value blue" id="prop-total-val">₹0</div><div class="card-sub">All properties</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Total Cost Basis</div><div class="card-value gold" id="prop-total-cost">₹0</div><div class="card-sub">Purchase price</div></div>
+        <div class="summary-card card-green"><div class="card-label">Unrealised Gain</div><div class="card-value positive" id="prop-total-gain">₹0</div></div>
+        <div class="summary-card card-orange"><div class="card-label">Properties</div><div class="card-value orange" id="prop-count">0</div></div>
+      </div>
+      <div class="col-7-5" style="margin-bottom:0">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="section-head" style="margin:0">All Properties</div>
+            <button class="btn btn-primary btn-sm" onclick="openModal('propModal')">+ Add Property</button>
+          </div>
+          <div id="prop-list"><div class="empty-state"><div class="empty-icon">⌂</div>No properties added yet</div></div>
+        </div>
+        <div>
+          <div class="section-head">Summary &amp; Tax</div>
+          <div class="panel">
+            <div class="panel-body">
+              <div class="tax-row"><span class="tax-key">Residential Flats</span><span class="tax-val" id="prop-summary-flat">—</span></div>
+              <div class="tax-row"><span class="tax-key">Houses / Villas</span><span class="tax-val" id="prop-summary-house">—</span></div>
+              <div class="tax-row"><span class="tax-key">Plots / Land</span><span class="tax-val" id="prop-summary-plot">—</span></div>
+              <div class="tax-row"><span class="tax-key">Tax Due (Next 30d)</span><span class="tax-val" id="prop-tax-due">—</span></div>
+              <div class="divider"></div>
+              <div class="card-label" style="margin-bottom:5px">Capital Gains Exposure</div>
+              <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--green)" id="prop-cap-gain">₹0</div>
+              <div class="card-sub">Unrealised gain across all properties</div>
+              <div class="alert alert-info" style="margin-top:12px"><span>ℹ</span><span>Properties held &gt;2 years qualify for LTCG indexation benefit under old regime.</span></div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:0">
+            <div class="panel-header"><span class="panel-title">Property Tax Upcoming</span></div>
+            <div class="panel-body" id="prop-tax-list">
+              <div class="empty-state"><div class="empty-icon">≋</div>No due dates set</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ GOLD ══════════ -->
+    <div class="view" id="view-gold">
+      <div class="summary-grid g3">
+        <div class="summary-card card-gold"><div class="card-label">Total Gold Value</div><div class="card-value gold" id="gold-total-val">₹0</div><div class="card-sub">At current rate</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Total Weight</div><div class="card-value teal" id="gold-total-wt">0 g</div></div>
+        <div class="summary-card card-green"><div class="card-label">Unrealised Gain</div><div class="card-value positive" id="gold-total-gain">₹0</div></div>
+      </div>
+      <div class="two-col" style="margin-bottom:0">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Holdings</span>
+            <div class="panel-actions">
+              <span style="font-size:11px;color:var(--muted)">Rate (₹/g):</span>
+              <input type="number" id="gold-rate-input" class="form-input" style="width:90px;padding:4px 8px;font-size:12px" placeholder="7500" onchange="goldRateChanged()" value="7500">
+              <button class="panel-action" onclick="openModal('goldModal')">+ Add</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="gold-list"><div class="empty-state"><div class="empty-icon">◎</div>No gold holdings added</div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Notes</span></div>
+          <div class="panel-body">
+            <div class="alert alert-warn"><span>⚡</span><span>Update the current gold rate (₹/g) on the left to recalculate all values.</span></div>
+            <div class="alert alert-info" style="margin-top:0"><span>ℹ</span><span>Digital Gold (SGBs, ETFs) tracked under Investments section for returns tracking.</span></div>
+            <div style="margin-top:14px">
+              <div class="card-label" style="margin-bottom:6px">By Member</div>
+              <div id="gold-by-member"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ INVESTMENTS ══════════ -->
+    <div class="view" id="view-investments">
+      <div class="summary-grid g3">
+        <div class="summary-card card-gold"><div class="card-label">Total Invested</div><div class="card-value gold" id="inv-cost">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Current Value</div><div class="card-value positive" id="inv-val">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Unrealised P&amp;L</div><div class="card-value teal" id="inv-pnl">₹0</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Portfolio</span><button class="panel-action" onclick="openModal('invModal')">+ Add</button></div>
+        <div class="panel-body">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Type</th><th>Member</th><th>Invested</th><th>Current Value</th><th>Returns</th></tr></thead>
+            <tbody id="inv-rows"><tr><td colspan="6"><div class="empty-state"><div class="empty-icon">↗</div>No investments</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ EPF ══════════ -->
+    <div class="view" id="view-epf">
+      <div class="summary-grid g3">
+        <div class="summary-card card-teal"><div class="card-label">EPF Balance</div><div class="card-value teal" id="epf-bal-display">₹0</div><div class="card-sub">Employee + Employer</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Monthly Contribution</div><div class="card-value gold" id="epf-monthly-display">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Interest Rate</div><div class="card-value positive">8.25%</div><div class="card-sub">FY 2024–25</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">EPF Details</span><button class="panel-action" onclick="openModal('epfModal')">Update</button></div>
+          <div class="panel-body">
+            <div class="tax-row"><span class="tax-key">UAN</span><span class="tax-val" id="epf-uan-d">—</span></div>
+            <div class="tax-row"><span class="tax-key">Employee Share</span><span class="tax-val" id="epf-emp-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Employer Share</span><span class="tax-val" id="epf-er-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Interest Earned</span><span class="tax-val positive" id="epf-int-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Last Updated</span><span class="tax-val" id="epf-upd-d">—</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">80C Impact</span></div>
+          <div class="panel-body">
+            <div class="card-label">EPF → 80C Deduction</div>
+            <div class="card-value gold" id="epf-80c-d">₹0</div>
+            <div class="divider"></div>
+            <div class="progress-wrap">
+              <div class="progress-label"><span>80C utilized via EPF</span><span id="epf-80c-pct">0%</span></div>
+              <div class="progress-bar"><div class="progress-fill" id="epf-80c-bar" style="width:0%;background:var(--accent2)"></div></div>
+            </div>
+            <div class="alert alert-info" style="margin-top:12px"><span>ℹ</span><span>Employee EPF contribution counts toward ₹1.5L 80C limit under old regime.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ NPS ══════════ -->
+    <div class="view" id="view-nps">
+      <div class="summary-grid g3">
+        <div class="summary-card card-purple"><div class="card-label">NPS Balance</div><div class="card-value purple" id="nps-bal-d">₹0</div><div class="card-sub">Tier I + II</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Monthly SIP</div><div class="card-value gold" id="nps-sip-d">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Tax Saved (80CCD)</div><div class="card-value positive" id="nps-tax-d">₹0</div><div class="card-sub">At 30% slab</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">NPS Details</span><button class="panel-action" onclick="openModal('npsModal')">Update</button></div>
+          <div class="panel-body">
+            <div class="tax-row"><span class="tax-key">PRAN</span><span class="tax-val" id="nps-pran-d">—</span></div>
+            <div class="tax-row"><span class="tax-key">Tier I</span><span class="tax-val" id="nps-t1-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Tier II</span><span class="tax-val" id="nps-t2-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">FY Contribution</span><span class="tax-val" id="nps-contrib-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Equity %</span><span class="tax-val" id="nps-eq-d">—</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">80CCD(1B) Tracker</span></div>
+          <div class="panel-body">
+            <div class="progress-wrap">
+              <div class="progress-label"><span>₹50,000 limit used</span><span id="nps-80ccd-pct">0%</span></div>
+              <div class="progress-bar"><div class="progress-fill" id="nps-80ccd-bar" style="width:0%;background:var(--accent3)"></div></div>
+            </div>
+            <div class="mini-stats" style="margin-top:14px">
+              <div><div class="mini-stat-label">Contributed</div><div class="mini-stat-val" id="nps-ctb-d">₹0</div></div>
+              <div><div class="mini-stat-label">Remaining</div><div class="mini-stat-val" id="nps-rem-d">₹50,000</div></div>
+            </div>
+            <div class="alert alert-success" style="margin-top:14px"><span>✓</span><span>NPS 80CCD(1B) is over and above 80C. ₹50K extra deduction = ₹15,600 saved at 30% slab.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ LOANS ══════════ -->
+    <div class="view" id="view-loans">
+      <div class="summary-grid g4">
+        <div class="summary-card card-red"><div class="card-label">Total Outstanding</div><div class="card-value negative" id="loan-total">₹0</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Total Monthly EMI</div><div class="card-value gold" id="loan-emi-total">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Total Interest Paid</div><div class="card-value teal" id="loan-int-paid">₹0</div></div>
+        <div class="summary-card card-purple"><div class="card-label">Active Loans</div><div class="card-value purple" id="loan-count">0</div></div>
+      </div>
+      <div class="col-7-5" style="margin-bottom:0">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="section-head" style="margin:0">All Loans</div>
+            <button class="btn btn-primary btn-sm" onclick="openModal('loanModal')">+ Add Loan</button>
+          </div>
+          <div id="loan-list"><div class="empty-state"><div class="empty-icon">≈</div>No loans added</div></div>
+        </div>
+        <div>
+          <div class="section-head">EMI Calendar</div>
+          <div class="panel">
+            <div class="panel-body" id="loan-calendar">
+              <div class="empty-state"><div class="empty-icon">≋</div>No upcoming EMIs</div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:0">
+            <div class="panel-header"><span class="panel-title">24(b) Home Loan Deduction</span></div>
+            <div class="panel-body">
+              <div class="card-value gold" id="loan-24b-val">₹0</div>
+              <div class="card-sub">Interest deduction claimed</div>
+              <div class="progress-wrap" style="margin-top:10px">
+                <div class="progress-label"><span>₹2L limit used</span><span id="loan-24b-pct">0%</span></div>
+                <div class="progress-bar"><div class="progress-fill" id="loan-24b-bar" style="width:0%;background:var(--accent)"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ INSURANCE ══════════ -->
+    <div class="view" id="view-insurance">
+      <div class="summary-grid g4">
+        <div class="summary-card card-gold"><div class="card-label">Annual Premiums</div><div class="card-value gold" id="ins-total-premium">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Life Cover</div><div class="card-value positive" id="ins-life-cover">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Health Cover</div><div class="card-value teal" id="ins-health-cover">₹0</div></div>
+        <div class="summary-card card-orange"><div class="card-label">Policies</div><div class="card-value orange" id="ins-count">0</div></div>
+      </div>
+      <div class="col-7-5" style="margin-bottom:0">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="section-head" style="margin:0">All Policies</div>
+            <button class="btn btn-primary btn-sm" onclick="openModal('insModal')">+ Add Policy</button>
+          </div>
+          <div id="ins-list"><div class="empty-state"><div class="empty-icon">⛨</div>No policies added yet</div></div>
+        </div>
+        <div>
+          <div class="section-head">Coverage Summary</div>
+          <div class="panel">
+            <div class="panel-body">
+              <div class="tax-row"><span class="tax-key">Life Insurance</span><span class="tax-val" id="ins-life-summary">—</span></div>
+              <div class="tax-row"><span class="tax-key">Health (Self)</span><span class="tax-val" id="ins-health-self">—</span></div>
+              <div class="tax-row"><span class="tax-key">Health (Family)</span><span class="tax-val" id="ins-health-family">—</span></div>
+              <div class="tax-row"><span class="tax-key">Auto Insurance</span><span class="tax-val" id="ins-auto-summary">—</span></div>
+              <div class="divider"></div>
+              <div class="card-label" style="margin-bottom:5px">80D Deduction (Health Premiums)</div>
+              <div class="card-value positive" style="font-size:18px" id="ins-80d-val">₹0</div>
+              <div class="progress-wrap" style="margin-top:8px">
+                <div class="progress-label"><span>80D limit (₹25K self + ₹50K parents)</span><span id="ins-80d-pct">0%</span></div>
+                <div class="progress-bar"><div class="progress-fill" id="ins-80d-bar" style="width:0%;background:var(--green)"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ BUDGET ══════════ -->
+    <div class="view" id="view-budget">
+      <div class="summary-grid g4">
+        <div class="summary-card card-teal"><div class="card-label">Monthly Budget</div><div class="card-value teal" id="bud-total">₹0</div></div>
+        <div class="summary-card card-red"><div class="card-label">Actual Spend</div><div class="card-value negative" id="bud-actual">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Remaining</div><div class="card-value positive" id="bud-remaining">₹0</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Budget Used</div><div class="card-value gold" id="bud-pct">0%</div></div>
+      </div>
+      <div class="two-col" style="margin-bottom:0">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Category Budgets</span>
+            <button class="panel-action" onclick="openModal('budgetModal')">Edit Budgets</button>
+          </div>
+          <div class="panel-body" id="budget-bars">
+            <div class="empty-state"><div class="empty-icon">⊞</div>Set budgets to get started</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">This Month vs Last Month</span></div>
+          <div class="panel-body" id="budget-compare">
+            <div class="empty-state"><div class="empty-icon">⊞</div>Not enough data yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ TAX ══════════ -->
+    <div class="view" id="view-tax">
+      <div class="summary-grid g4">
+        <div class="summary-card card-gold"><div class="card-label">Gross Income</div><div class="card-value gold" id="tax-gross-d">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Total Deductions</div><div class="card-value teal" id="tax-ded-d">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Taxable Income</div><div class="card-value positive" id="tax-txbl-d">₹0</div></div>
+        <div class="summary-card card-red"><div class="card-label">Est. Tax (Best)</div><div class="card-value negative" id="tax-best-d">₹0</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Deductions — Old Regime</span><button class="panel-action" onclick="openModal('taxModal')">Update</button></div>
+          <div class="panel-body">
+            <div class="tax-row"><span class="tax-key">Standard Deduction</span><span class="tax-val">₹75,000</span></div>
+            <div class="tax-row"><span class="tax-key">80C (Limit ₹1,50,000)</span><span class="tax-val positive" id="t-80c">₹0 / ₹1,50,000</span></div>
+            <div class="progress-bar" style="margin:-2px 0 8px"><div class="progress-fill" id="bar-80c" style="width:0%;background:var(--green)"></div></div>
+            <div class="tax-row"><span class="tax-key">80CCD(1B) NPS (Limit ₹50,000)</span><span class="tax-val positive" id="t-80ccd">₹0 / ₹50,000</span></div>
+            <div class="progress-bar" style="margin:-2px 0 8px"><div class="progress-fill" id="bar-80ccd" style="width:0%;background:var(--accent3)"></div></div>
+            <div class="tax-row"><span class="tax-key">24(b) Home Loan (Limit ₹2,00,000)</span><span class="tax-val" id="t-24b">₹0 / ₹2,00,000</span></div>
+            <div class="progress-bar" style="margin:-2px 0 8px"><div class="progress-fill" id="bar-24b" style="width:0%;background:var(--accent)"></div></div>
+            <div class="tax-row"><span class="tax-key">80D Medical (Limit ₹25,000)</span><span class="tax-val" id="t-80d">₹0 / ₹25,000</span></div>
+            <div class="progress-bar" style="margin:-2px 0 8px"><div class="progress-fill" id="bar-80d" style="width:0%;background:var(--accent2)"></div></div>
+            <div class="tax-row"><span class="tax-key">HRA Exemption</span><span class="tax-val" id="t-hra">₹0</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Regime Comparison</span></div>
+          <div class="panel-body">
+            <div class="two-col" style="margin-bottom:14px;gap:10px">
+              <div style="background:var(--surface2);border-radius:10px;padding:14px;border:1px solid rgba(181,129,58,.2)">
+                <div class="card-label">Old Regime</div>
+                <div class="card-value gold" id="old-tax" style="margin-top:6px">₹0</div>
+                <div id="old-rec" style="margin-top:8px"></div>
+              </div>
+              <div style="background:var(--surface2);border-radius:10px;padding:14px;border:1px solid var(--border)">
+                <div class="card-label">New Regime</div>
+                <div class="card-value" id="new-tax" style="margin-top:6px">₹0</div>
+              </div>
+            </div>
+            <div id="tax-verdict" class="alert alert-info"><span>ℹ</span><span>Enter income to see comparison.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ TRANSACTIONS ══════════ -->
+    <div class="view" id="view-transactions">
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">All Transactions</span><button class="panel-action" onclick="openModal('txnModal')">+ Add</button></div>
+        <div class="panel-body" id="txn-list">
+          <div class="empty-state"><div class="empty-icon">≡</div>No transactions</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ IMPORT ══════════ -->
+    <div class="view" id="view-import">
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Smart Statement Import</span></div>
+        <div class="panel-body">
+          <div class="alert alert-info" style="margin-bottom:16px"><span>ℹ</span><span>All parsing happens locally in your browser. No data is uploaded anywhere.</span></div>
+          <div style="margin-bottom:14px">
+            <div class="form-label" style="margin-bottom:7px">Select bank / card</div>
+            <div class="bank-tabs">
+              <button class="bank-tab active" onclick="selectBank('icici-salary',this)">ICICI Salary</button>
+              <button class="bank-tab" onclick="selectBank('icici-cc',this)">ICICI Credit Card</button>
+              <button class="bank-tab" onclick="selectBank('sc',this)">Standard Chartered</button>
+              <button class="bank-tab" onclick="selectBank('amex',this)">American Express</button>
+            </div>
+          </div>
+          <div id="bank-format-info" style="margin-bottom:14px"></div>
+          <div class="import-zone" onclick="document.getElementById('csvFile').click()">
+            <div style="font-size:24px;margin-bottom:7px">📂</div>
+            <div>Drop CSV file or click to browse</div>
+            <div style="font-size:10px;margin-top:4px;font-family:'DM Mono',monospace;color:var(--muted)" id="import-hint">Select a bank above, then upload</div>
+          </div>
+          <input type="file" id="csvFile" accept=".csv,.CSV" style="display:none" onchange="parseCSV(event)">
+          <div id="parse-result" style="margin-top:16px;display:none">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="font-family:'Lora',serif;font-size:14px">Preview</span>
+                <span id="parse-status-badge"></span>
+              </div>
+              <button class="btn btn-primary btn-sm" id="importConfirmBtn" onclick="confirmImport()">Import All</button>
+            </div>
+            <div class="parse-preview" id="parse-preview-table"></div>
+            <div style="margin-top:8px;font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="parse-summary"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- ══════════════ MODALS ══════════════ -->
+
+<!-- Account Modal -->
+<div class="modal-backdrop" id="accModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('accModal')">×</button>
+    <div class="modal-title" id="accModalTitle">Add Bank Account</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Bank &amp; Account Name</label><input class="form-input" id="m-acc-name" placeholder="e.g. ICICI Salary Account"></div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-acc-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Account Type</label>
+        <select class="form-select" id="m-acc-type">
+          <option>Salary</option><option>Savings</option><option>Current</option><option>FD</option><option>RD</option>
+        </select>
+      </div>
+      <div class="form-group form-full"><label class="form-label">Balance (₹)</label><input class="form-input" id="m-acc-bal" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Monthly Credits (₹)</label><input class="form-input" id="m-acc-in" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Monthly Debits (₹)</label><input class="form-input" id="m-acc-out" type="number" placeholder="0"></div>
+    </div>
+    <input type="hidden" id="m-acc-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('accModal')">Cancel</button><button class="btn btn-primary" onclick="saveAcc()">Save</button></div>
+  </div>
+</div>
+
+<!-- Card Modal -->
+<div class="modal-backdrop" id="cardModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('cardModal')">×</button>
+    <div class="modal-title" id="cardModalTitle">Add Credit Card</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Card Name</label><input class="form-input" id="m-card-name" placeholder="e.g. Amex Gold Card"></div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-card-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Outstanding (₹)</label><input class="form-input" id="m-card-out" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Credit Limit (₹)</label><input class="form-input" id="m-card-lim" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" id="m-card-due" type="date"></div>
+      <div class="form-group"><label class="form-label">Min Due (₹)</label><input class="form-input" id="m-card-min" type="number" placeholder="0"></div>
+    </div>
+    <input type="hidden" id="m-card-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('cardModal')">Cancel</button><button class="btn btn-primary" onclick="saveCard()">Save</button></div>
+  </div>
+</div>
+
+<!-- Reward Modal -->
+<div class="modal-backdrop" id="rewardModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('rewardModal')">×</button>
+    <div class="modal-title" id="rewardModalTitle">Update Reward Points</div>
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Points Balance</label><input class="form-input" id="m-rw-pts" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Value per Point (₹)</label><input class="form-input" id="m-rw-rate" type="number" step="0.01" placeholder="0.50"></div>
+      <div class="form-group"><label class="form-label">Expiry Date</label><input class="form-input" id="m-rw-exp" type="date"></div>
+      <div class="form-group"><label class="form-label">Tier / Status</label><input class="form-input" id="m-rw-tier" type="text" placeholder="Gold / Platinum"></div>
+    </div>
+    <input type="hidden" id="m-rw-key">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('rewardModal')">Cancel</button><button class="btn btn-primary" onclick="saveReward()">Save</button></div>
+  </div>
+</div>
+
+<!-- Property Modal -->
+<div class="modal-backdrop" id="propModal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('propModal')">×</button>
+    <div class="modal-title" id="propModalTitle">Add Property</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Property Name / Description</label><input class="form-input" id="m-prop-name" placeholder="e.g. Flat 3B, Prestige Towers, Hyderabad"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-prop-type">
+          <option value="flat">Residential Flat</option><option value="house">Independent House / Villa</option><option value="plot">Plot / Land</option><option value="commercial">Commercial</option><option value="agri">Agricultural</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Owner / Member</label>
+        <select class="form-select" id="m-prop-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint (All)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Location / City</label><input class="form-input" id="m-prop-location" placeholder="e.g. Hyderabad, Vijayawada"></div>
+      <div class="form-group"><label class="form-label">Purchase Price (₹)</label><input class="form-input" id="m-prop-cost" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Current Market Value (₹)</label><input class="form-input" id="m-prop-val" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Purchase Date</label><input class="form-input" id="m-prop-date" type="date"></div>
+      <div class="form-group"><label class="form-label">Area (sq.ft)</label><input class="form-input" id="m-prop-area" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Property Tax (₹/year)</label><input class="form-input" id="m-prop-tax" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Property Tax Due Date</label><input class="form-input" id="m-prop-taxdue" type="date"></div>
+      <div class="form-group form-full"><label class="form-label">Linked Loan (if any)</label>
+        <select class="form-select" id="m-prop-loan">
+          <option value="">None</option>
+        </select>
+      </div>
+      <div class="form-group form-full"><label class="form-label">Notes (Registration No, Document details)</label><input class="form-input" id="m-prop-notes" placeholder="e.g. Reg No: TS-1234, Doc 5678"></div>
+    </div>
+    <input type="hidden" id="m-prop-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('propModal')">Cancel</button><button class="btn btn-primary" onclick="saveProp()">Save Property</button></div>
+  </div>
+</div>
+
+<!-- Loan Modal -->
+<div class="modal-backdrop" id="loanModal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('loanModal')">×</button>
+    <div class="modal-title" id="loanModalTitle">Add Loan</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Loan Name / Description</label><input class="form-input" id="m-loan-name" placeholder="e.g. HDFC Home Loan"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-loan-type">
+          <option value="home">Home Loan</option><option value="car">Car Loan</option><option value="personal">Personal Loan</option><option value="education">Education Loan</option><option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-loan-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Lender / Bank</label><input class="form-input" id="m-loan-lender" placeholder="e.g. HDFC, SBI, ICICI"></div>
+      <div class="form-group"><label class="form-label">Principal Amount (₹)</label><input class="form-input" id="m-loan-principal" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Outstanding Balance (₹)</label><input class="form-input" id="m-loan-outstanding" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">EMI Amount (₹)</label><input class="form-input" id="m-loan-emi" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Interest Rate (% p.a.)</label><input class="form-input" id="m-loan-rate" type="number" step="0.01" placeholder="8.5"></div>
+      <div class="form-group"><label class="form-label">EMI Date (day of month)</label><input class="form-input" id="m-loan-emiday" type="number" min="1" max="31" placeholder="5"></div>
+      <div class="form-group"><label class="form-label">Tenure Remaining (months)</label><input class="form-input" id="m-loan-tenure" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Annual Interest Paid (₹)</label><input class="form-input" id="m-loan-intpaid" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Loan Start Date</label><input class="form-input" id="m-loan-start" type="date"></div>
+    </div>
+    <input type="hidden" id="m-loan-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('loanModal')">Cancel</button><button class="btn btn-primary" onclick="saveLoan()">Save Loan</button></div>
+  </div>
+</div>
+
+<!-- Gold Modal -->
+<div class="modal-backdrop" id="goldModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('goldModal')">×</button>
+    <div class="modal-title" id="goldModalTitle">Add Gold / Jewellery</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Description</label><input class="form-input" id="m-gold-name" placeholder="e.g. Necklace set, Bangles, Coins"></div>
+      <div class="form-group"><label class="form-label">Member / Owner</label>
+        <select class="form-select" id="m-gold-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Form</label>
+        <select class="form-select" id="m-gold-form">
+          <option value="jewellery">Jewellery</option><option value="coin">Coins / Bars</option><option value="digital">Digital Gold / SGB</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Weight (grams)</label><input class="form-input" id="m-gold-wt" type="number" step="0.01" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Purity (carats)</label>
+        <select class="form-select" id="m-gold-purity">
+          <option value="24">24K (Pure)</option><option value="22" selected>22K</option><option value="18">18K</option><option value="14">14K</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Purchase Price (₹)</label><input class="form-input" id="m-gold-cost" type="number" placeholder="0"></div>
+      <div class="form-group form-full"><label class="form-label">Notes (e.g. stored at, occasion)</label><input class="form-input" id="m-gold-notes" placeholder="e.g. Bank locker, Wedding gift"></div>
+    </div>
+    <input type="hidden" id="m-gold-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('goldModal')">Cancel</button><button class="btn btn-primary" onclick="saveGold()">Save</button></div>
+  </div>
+</div>
+
+<!-- Investment Modal -->
+<div class="modal-backdrop" id="invModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('invModal')">×</button>
+    <div class="modal-title">Add Investment</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Name</label><input class="form-input" id="m-inv-name" placeholder="e.g. Axis Bluechip Fund"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-inv-type"><option>Mutual Fund</option><option>Stock</option><option>Fixed Deposit</option><option>PPF</option><option>SGB</option><option>Other</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-inv-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Invested (₹)</label><input class="form-input" id="m-inv-cost" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Current Value (₹)</label><input class="form-input" id="m-inv-val" type="number" placeholder="0"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('invModal')">Cancel</button><button class="btn btn-primary" onclick="saveInv()">Add</button></div>
+  </div>
+</div>
+
+<!-- Insurance Modal -->
+<div class="modal-backdrop" id="insModal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('insModal')">×</button>
+    <div class="modal-title" id="insModalTitle">Add Insurance Policy</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Policy Name</label><input class="form-input" id="m-ins-name" placeholder="e.g. HDFC Life Click2Protect"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-ins-type" onchange="insTypeChanged()">
+          <option value="life">Life Insurance</option><option value="health">Health Insurance</option><option value="auto">Auto Insurance</option><option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Insurer</label><input class="form-input" id="m-ins-insurer" placeholder="e.g. HDFC Life, Star Health"></div>
+      <div class="form-group"><label class="form-label">Policy Number</label><input class="form-input" id="m-ins-polno" placeholder="POL-XXXXXXXX"></div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-ins-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint/Family</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Sum Assured / Cover (₹)</label><input class="form-input" id="m-ins-cover" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Annual Premium (₹)</label><input class="form-input" id="m-ins-premium" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Premium Due Date</label><input class="form-input" id="m-ins-due" type="date"></div>
+      <div class="form-group"><label class="form-label">Frequency</label>
+        <select class="form-select" id="m-ins-freq"><option value="annual">Annual</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="semi-annual">Semi-Annual</option></select>
+      </div>
+      <div class="form-group form-full" id="ins-covered-wrap">
+        <label class="form-label">Members Covered</label>
+        <input class="form-input" id="m-ins-covered" placeholder="e.g. Self, Spouse, Daughter">
+      </div>
+      <div class="form-group form-full" id="ins-vehicle-wrap" style="display:none">
+        <label class="form-label">Vehicle Registration</label>
+        <input class="form-input" id="m-ins-vehicle" placeholder="e.g. TS09AB1234">
+      </div>
+    </div>
+    <input type="hidden" id="m-ins-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('insModal')">Cancel</button><button class="btn btn-primary" onclick="saveIns()">Save Policy</button></div>
+  </div>
+</div>
+
+<!-- EPF Modal -->
+<div class="modal-backdrop" id="epfModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('epfModal')">×</button>
+    <div class="modal-title">Update EPF</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">UAN</label><input class="form-input" id="m-epf-uan" placeholder="Universal Account Number"></div>
+      <div class="form-group"><label class="form-label">Total Balance (₹)</label><input class="form-input" id="m-epf-bal" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Employee Share (₹)</label><input class="form-input" id="m-epf-emp" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Employer Share (₹)</label><input class="form-input" id="m-epf-er" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Monthly Contribution (₹)</label><input class="form-input" id="m-epf-monthly" type="number" placeholder="0"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('epfModal')">Cancel</button><button class="btn btn-primary" onclick="saveEPF()">Save</button></div>
+  </div>
+</div>
+
+<!-- NPS Modal -->
+<div class="modal-backdrop" id="npsModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('npsModal')">×</button>
+    <div class="modal-title">Update NPS</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">PRAN</label><input class="form-input" id="m-nps-pran" placeholder="Permanent Retirement Account Number"></div>
+      <div class="form-group"><label class="form-label">Tier I Balance (₹)</label><input class="form-input" id="m-nps-t1" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Tier II Balance (₹)</label><input class="form-input" id="m-nps-t2" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">FY Contribution (₹)</label><input class="form-input" id="m-nps-contrib" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Monthly SIP (₹)</label><input class="form-input" id="m-nps-sip" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Equity % (Tier I)</label><input class="form-input" id="m-nps-eq" type="number" placeholder="75"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('npsModal')">Cancel</button><button class="btn btn-primary" onclick="saveNPS()">Save</button></div>
+  </div>
+</div>
+
+<!-- Tax Modal -->
+<div class="modal-backdrop" id="taxModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('taxModal')">×</button>
+    <div class="modal-title">Update Tax Details</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Annual Gross Income (₹)</label><input class="form-input" id="m-tax-gross" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80C (₹)</label><input class="form-input" id="m-tax-80c" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80CCD(1B) NPS (₹)</label><input class="form-input" id="m-tax-nps" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">24(b) Home Loan (₹)</label><input class="form-input" id="m-tax-hl" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80D Medical (₹)</label><input class="form-input" id="m-tax-80d" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">HRA Exemption (₹)</label><input class="form-input" id="m-tax-hra" type="number" placeholder="0"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('taxModal')">Cancel</button><button class="btn btn-primary" onclick="saveTax()">Calculate</button></div>
+  </div>
+</div>
+
+<!-- Transaction Modal -->
+<div class="modal-backdrop" id="txnModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('txnModal')">×</button>
+    <div class="modal-title">Add Transaction</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Description</label><input class="form-input" id="m-txn-desc" placeholder="e.g. Swiggy dinner"></div>
+      <div class="form-group"><label class="form-label">Amount (₹)</label><input class="form-input" id="m-txn-amt" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-txn-type"><option value="debit">Debit / Spend</option><option value="credit">Credit / Income</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="m-txn-cat"><option>Food &amp; Dining</option><option>Travel</option><option>Shopping</option><option>Utilities</option><option>Entertainment</option><option>Healthcare</option><option>Education</option><option>Insurance</option><option>Investment</option><option>Salary</option><option>EMI</option><option>Other</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-txn-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="m-txn-date" type="date"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('txnModal')">Cancel</button><button class="btn btn-primary" onclick="saveTxn()">Add</button></div>
+  </div>
+</div>
+
+<!-- Budget Modal -->
+<div class="modal-backdrop" id="budgetModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('budgetModal')">×</button>
+    <div class="modal-title">Edit Monthly Budgets</div>
+    <div id="budget-form-rows" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px"></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('budgetModal')">Cancel</button><button class="btn btn-primary" onclick="saveBudget()">Save Budgets</button></div>
+  </div>
+</div>
+
+<script>// ─────────────────────────────────────────────
+// FAMILY FINANCE OS — DATA STORE
+// ─────────────────────────────────────────────
+const KEY = 'family_finance_v1';
+
+const MEMBERS = ['madhu','sailaja','parents','charan','himaja','joint'];
+const MEMBER_NAMES = {madhu:'Madhu',sailaja:'Sailaja',parents:'Parents',charan:'Charan',himaja:'Himaja',joint:'Joint'};
+const MEMBER_COLORS = {madhu:'#b5813a',sailaja:'#4a7c6f',parents:'#7b5ea7',charan:'#3a7d54',himaja:'#c0692b',joint:'#4a6fa5'};
+
+let currentMember = 'all';
+
+let D = {
+  accounts: [],
+  cards: [],
+  rewards: {
+    'amex':    {points:0, rate:0.5,  expiry:'', tier:'Green'},
+    'icici-cc':{points:0, rate:0.25, expiry:'', tier:''}
+  },
+  investments: [],
+  insurance: [],
+  properties: [],
+  loans: [],
+  gold: [],
+  goldRate: 7500,
+  epf:  {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null},
+  nps:  {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75},
+  tax:  {gross:0, s80c:0, s80ccd:0, s24b:0, s80d:0, hra:0},
+  transactions: [],
+  budgets: {
+    'Food & Dining':0, 'Travel':0, 'Shopping':0, 'Utilities':0,
+    'Entertainment':0, 'Healthcare':0, 'Education':0, 'Insurance':0,
+    'Investment':0, 'EMI':0, 'Other':0
+  },
+  nwHistory: []
+};
+
+function load() {
+  try {
+    const s = localStorage.getItem(KEY);
+    if (s) {
+      const parsed = JSON.parse(s);
+      D = deepMerge(D, parsed);
+    }
+  } catch(e) {}
+}
+
+function deepMerge(target, source) {
+  const out = Object.assign({}, target);
+  for (const key in source) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      out[key] = deepMerge(target[key] || {}, source[key]);
+    } else {
+      out[key] = source[key];
+    }
+  }
+  return out;
+}
+
+function save() {
+  localStorage.setItem(KEY, JSON.stringify(D));
+  const t = new Date();
+  document.getElementById('lastUpdated').textContent =
+    'Saved ' + t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+const fmt = n => '₹' + Math.abs(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+const cr = n => '₹' + (Math.abs(n||0)/1e7).toFixed(2) + ' Cr';
+const lk = n => '₹' + (Math.abs(n||0)/1e5).toFixed(1) + ' L';
+const todayStr = () => new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+const pf = (v, max) => Math.min(Math.round((v/max)*100), 100);
+
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr) - new Date();
+  return Math.ceil(diff / (1000*60*60*24));
+}
+
+function memberTag(m) {
+  const name = MEMBER_NAMES[m] || m;
+  return `<span class="member-tag tag-${m}">${name}</span>`;
+}
+
+function filterByMember(arr) {
+  if (currentMember === 'all') return arr;
+  return arr.filter(item => item.member === currentMember || item.member === 'joint');
+}
+
+// ─────────────────────────────────────────────
+// NAV
+// ─────────────────────────────────────────────
+const PAGE_TITLES = {
+  overview:'Dashboard', accounts:'Bank Accounts', cards:'Credit Cards',
+  rewards:'Reward Points', property:'Property', gold:'Gold & Jewellery',
+  investments:'Investments', epf:'EPF', nps:'NPS',
+  loans:'Loans & EMI', insurance:'Insurance', budget:'Budget vs Actuals',
+  tax:'Tax Tracker', transactions:'Transactions', import:'Import Statement'
+};
+
+let currentView = 'overview';
+
+function go(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const view = document.getElementById('view-' + id);
+  if (view) view.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'" + id + "'"))
+      n.classList.add('active');
+  });
+  document.getElementById('pageTitle').textContent = PAGE_TITLES[id] || id;
+  updateMemberContext();
+  currentView = id;
+  renderAll();
+}
+
+function setMember(m, el) {
+  currentMember = m;
+  document.querySelectorAll('.member-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  updateMemberContext();
+  renderAll();
+}
+
+function updateMemberContext() {
+  const ctx = document.getElementById('memberContext');
+  if (currentMember === 'all') {
+    ctx.textContent = 'Family — All Members';
+  } else {
+    ctx.textContent = MEMBER_NAMES[currentMember] || currentMember;
+  }
+}
+
+function ctxAdd() {
+  const map = {
+    accounts:'accModal', cards:'cardModal', rewards:'rewardModal',
+    property:'propModal', gold:'goldModal', investments:'invModal',
+    loans:'loanModal', insurance:'insModal', epf:'epfModal',
+    nps:'npsModal', tax:'taxModal', transactions:'txnModal', budget:'budgetModal'
+  };
+  openModal(map[currentView] || 'txnModal');
+}
+
+// ─────────────────────────────────────────────
+// MODALS
+// ─────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function openRewardModal(key) {
+  const names = {'amex':'Amex MR Points','icici-cc':'ICICI Reward Points'};
+  document.getElementById('rewardModalTitle').textContent = 'Update — ' + names[key];
+  const r = D.rewards[key];
+  document.getElementById('m-rw-pts').value = r.points || '';
+  document.getElementById('m-rw-rate').value = r.rate || '';
+  document.getElementById('m-rw-exp').value = r.expiry || '';
+  document.getElementById('m-rw-tier').value = r.tier || '';
+  document.getElementById('m-rw-key').value = key;
+  openModal('rewardModal');
+}
+
+function insTypeChanged() {
+  const t = document.getElementById('m-ins-type').value;
+  document.getElementById('ins-vehicle-wrap').style.display = t === 'auto' ? 'block' : 'none';
+  document.getElementById('ins-covered-wrap').style.display = t !== 'auto' ? 'block' : 'none';
+}
+
+function openEditProp(id) {
+  const p = D.properties.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('propModalTitle').textContent = 'Edit Property';
+  document.getElementById('m-prop-id').value = id;
+  document.getElementById('m-prop-name').value = p.name;
+  document.getElementById('m-prop-type').value = p.type;
+  document.getElementById('m-prop-member').value = p.member;
+  document.getElementById('m-prop-location').value = p.location || '';
+  document.getElementById('m-prop-cost').value = p.cost || 0;
+  document.getElementById('m-prop-val').value = p.value || 0;
+  document.getElementById('m-prop-date').value = p.purchaseDate || '';
+  document.getElementById('m-prop-area').value = p.area || 0;
+  document.getElementById('m-prop-tax').value = p.propTax || 0;
+  document.getElementById('m-prop-taxdue').value = p.propTaxDue || '';
+  document.getElementById('m-prop-notes').value = p.notes || '';
+  populateLoanSelect(p.linkedLoan);
+  openModal('propModal');
+}
+
+function openEditLoan(id) {
+  const l = D.loans.find(x => x.id === id);
+  if (!l) return;
+  document.getElementById('loanModalTitle').textContent = 'Edit Loan';
+  document.getElementById('m-loan-id').value = id;
+  document.getElementById('m-loan-name').value = l.name;
+  document.getElementById('m-loan-type').value = l.type;
+  document.getElementById('m-loan-member').value = l.member;
+  document.getElementById('m-loan-lender').value = l.lender || '';
+  document.getElementById('m-loan-principal').value = l.principal || 0;
+  document.getElementById('m-loan-outstanding').value = l.outstanding || 0;
+  document.getElementById('m-loan-emi').value = l.emi || 0;
+  document.getElementById('m-loan-rate').value = l.rate || 0;
+  document.getElementById('m-loan-emiday').value = l.emiDay || '';
+  document.getElementById('m-loan-tenure').value = l.tenure || 0;
+  document.getElementById('m-loan-intpaid').value = l.intPaid || 0;
+  document.getElementById('m-loan-start').value = l.startDate || '';
+  openModal('loanModal');
+}
+
+function openEditGold(id) {
+  const g = D.gold.find(x => x.id === id);
+  if (!g) return;
+  document.getElementById('goldModalTitle').textContent = 'Edit Gold Item';
+  document.getElementById('m-gold-id').value = id;
+  document.getElementById('m-gold-name').value = g.name;
+  document.getElementById('m-gold-member').value = g.member;
+  document.getElementById('m-gold-form').value = g.form;
+  document.getElementById('m-gold-wt').value = g.weight || 0;
+  document.getElementById('m-gold-purity').value = g.purity || 22;
+  document.getElementById('m-gold-cost').value = g.cost || 0;
+  document.getElementById('m-gold-notes').value = g.notes || '';
+  openModal('goldModal');
+}
+
+function openEditIns(id) {
+  const p = D.insurance.find(i => i.id === id);
+  if (!p) return;
+  document.getElementById('insModalTitle').textContent = 'Edit Policy';
+  document.getElementById('m-ins-id').value = id;
+  document.getElementById('m-ins-name').value = p.name;
+  document.getElementById('m-ins-type').value = p.type;
+  document.getElementById('m-ins-insurer').value = p.insurer;
+  document.getElementById('m-ins-polno').value = p.polno || '';
+  document.getElementById('m-ins-member').value = p.member || 'madhu';
+  document.getElementById('m-ins-cover').value = p.cover || 0;
+  document.getElementById('m-ins-premium').value = p.premium || 0;
+  document.getElementById('m-ins-due').value = p.dueDate || '';
+  document.getElementById('m-ins-freq').value = p.freq || 'annual';
+  document.getElementById('m-ins-covered').value = (p.covered||[]).join(', ');
+  document.getElementById('m-ins-vehicle').value = p.vehicle || '';
+  insTypeChanged();
+  openModal('insModal');
+}
+
+function populateLoanSelect(selected) {
+  const sel = document.getElementById('m-prop-loan');
+  sel.innerHTML = '<option value="">None</option>' +
+    D.loans.map(l => `<option value="${l.id}" ${l.id === selected ? 'selected' : ''}>${l.name}</option>`).join('');
+}
+
+// ─────────────────────────────────────────────
+// SAVE HANDLERS
+// ─────────────────────────────────────────────
+function saveAcc() {
+  const id = document.getElementById('m-acc-id').value;
+  const acc = {
+    id: id ? +id : Date.now(),
+    name: document.getElementById('m-acc-name').value,
+    member: document.getElementById('m-acc-member').value,
+    type: document.getElementById('m-acc-type').value,
+    balance: +document.getElementById('m-acc-bal').value || 0,
+    credits: +document.getElementById('m-acc-in').value || 0,
+    debits: +document.getElementById('m-acc-out').value || 0,
+    updated: todayStr()
+  };
+  if (!acc.name) return;
+  upsert(D.accounts, acc);
+  snapshotNW(); save(); renderAll(); closeModal('accModal');
+  document.getElementById('m-acc-id').value = '';
+  document.getElementById('m-acc-name').value = '';
+}
+
+function saveCard() {
+  const id = document.getElementById('m-card-id').value;
+  const card = {
+    id: id ? +id : Date.now(),
+    name: document.getElementById('m-card-name').value,
+    member: document.getElementById('m-card-member').value,
+    outstanding: +document.getElementById('m-card-out').value || 0,
+    limit: +document.getElementById('m-card-lim').value || 0,
+    dueDate: document.getElementById('m-card-due').value,
+    minDue: +document.getElementById('m-card-min').value || 0
+  };
+  if (!card.name) return;
+  upsert(D.cards, card);
+  save(); renderAll(); closeModal('cardModal');
+  document.getElementById('m-card-id').value = '';
+}
+
+function saveReward() {
+  const k = document.getElementById('m-rw-key').value;
+  D.rewards[k] = {
+    points: +document.getElementById('m-rw-pts').value || 0,
+    rate: +document.getElementById('m-rw-rate').value || 0.25,
+    expiry: document.getElementById('m-rw-exp').value,
+    tier: document.getElementById('m-rw-tier').value
+  };
+  save(); renderAll(); closeModal('rewardModal');
+}
+
+function saveProp() {
+  const id = document.getElementById('m-prop-id').value;
+  const prop = {
+    id: id ? +id : Date.now(),
+    name: document.getElementById('m-prop-name').value,
+    type: document.getElementById('m-prop-type').value,
+    member: document.getElementById('m-prop-member').value,
+    location: document.getElementById('m-prop-location').value,
+    cost: +document.getElementById('m-prop-cost').value || 0,
+    value: +document.getElementById('m-prop-val').value || 0,
+    purchaseDate: document.getElementById('m-prop-date').value,
+    area: +document.getElementById('m-prop-area').value || 0,
+    propTax: +document.getElementById('m-prop-tax').value || 0,
+    propTaxDue: document.getElementById('m-prop-taxdue').value,
+    linkedLoan: document.getElementById('m-prop-loan').value || null,
+    notes: document.getElementById('m-prop-notes').value
+  };
+  if (!prop.name) return;
+  upsert(D.properties, prop);
+  snapshotNW(); save(); renderAll(); closeModal('propModal');
+  document.getElementById('m-prop-id').value = '';
+  document.getElementById('propModalTitle').textContent = 'Add Property';
+}
+
+function deleteProp(id) {
+  D.properties = D.properties.filter(p => p.id !== id);
+  snapshotNW(); save(); renderAll();
+}
+
+function saveLoan() {
+  const id = document.getElementById('m-loan-id').value;
+  const loan = {
+    id: id ? +id : Date.now(),
+    name: document.getElementById('m-loan-name').value,
+    type: document.getElementById('m-loan-type').value,
+    member: document.getElementById('m-loan-member').value,
+    lender: document.getElementById('m-loan-lender').value,
+    principal: +document.getElementById('m-loan-principal').value || 0,
+    outstanding: +document.getElementById('m-loan-outstanding').value || 0,
+    emi: +document.getElementById('m-loan-emi').value || 0,
+    rate: +document.getElementById('m-loan-rate').value || 0,
+    emiDay: +document.getElementById('m-loan-emiday').value || 1,
+    tenure: +document.getElementById('m-loan-tenure').value || 0,
+    intPaid: +document.getElementById('m-loan-intpaid').value || 0,
+    startDate: document.getElementById('m-loan-start').value
+  };
+  if (!loan.name) return;
+  upsert(D.loans, loan);
+  snapshotNW(); save(); renderAll(); closeModal('loanModal');
+  document.getElementById('m-loan-id').value = '';
+  document.getElementById('loanModalTitle').textContent = 'Add Loan';
+}
+
+function deleteLoan(id) {
+  D.loans = D.loans.filter(l => l.id !== id);
+  snapshotNW(); save(); renderAll();
+}
+
+function saveGold() {
+  const id = document.getElementById('m-gold-id').value;
+  const item = {
+    id: id ? +id : Date.now(),
+    name: document.getElementById('m-gold-name').value,
+    member: document.getElementById('m-gold-member').value,
+    form: document.getElementById('m-gold-form').value,
+    weight: +document.getElementById('m-gold-wt').value || 0,
+    purity: +document.getElementById('m-gold-purity').value || 22,
+    cost: +document.getElementById('m-gold-cost').value || 0,
+    notes: document.getElementById('m-gold-notes').value
+  };
+  if (!item.name) return;
+  upsert(D.gold, item);
+  snapshotNW(); save(); renderAll(); closeModal('goldModal');
+  document.getElementById('m-gold-id').value = '';
+  document.getElementById('goldModalTitle').textContent = 'Add Gold / Jewellery';
+}
+
+function deleteGold(id) {
+  D.gold = D.gold.filter(g => g.id !== id);
+  save(); renderAll();
+}
+
+function saveInv() {
+  const inv = {
+    id: Date.now(),
+    name: document.getElementById('m-inv-name').value,
+    type: document.getElementById('m-inv-type').value,
+    member: document.getElementById('m-inv-member').value,
+    cost: +document.getElementById('m-inv-cost').value || 0,
+    value: +document.getElementById('m-inv-val').value || 0
+  };
+  if (!inv.name) return;
+  D.investments.push(inv);
+  snapshotNW(); save(); renderAll(); closeModal('invModal');
+  document.getElementById('m-inv-name').value = '';
+  document.getElementById('m-inv-cost').value = '';
+  document.getElementById('m-inv-val').value = '';
+}
+
+function deleteInv(id) {
+  D.investments = D.investments.filter(i => i.id !== id);
+  snapshotNW(); save(); renderAll();
+}
+
+function saveIns() {
+  const id = document.getElementById('m-ins-id').value;
+  const p = {
+    id: id ? +id : Date.now(),
+    name: document.getElementById('m-ins-name').value,
+    type: document.getElementById('m-ins-type').value,
+    insurer: document.getElementById('m-ins-insurer').value,
+    polno: document.getElementById('m-ins-polno').value,
+    member: document.getElementById('m-ins-member').value,
+    cover: +document.getElementById('m-ins-cover').value || 0,
+    premium: +document.getElementById('m-ins-premium').value || 0,
+    dueDate: document.getElementById('m-ins-due').value,
+    freq: document.getElementById('m-ins-freq').value,
+    covered: document.getElementById('m-ins-covered').value.split(',').map(s => s.trim()).filter(Boolean),
+    vehicle: document.getElementById('m-ins-vehicle').value
+  };
+  if (!p.name) return;
+  upsert(D.insurance, p);
+  save(); renderAll(); closeModal('insModal');
+  document.getElementById('m-ins-id').value = '';
+  document.getElementById('insModalTitle').textContent = 'Add Insurance Policy';
+}
+
+function deleteIns(id) {
+  D.insurance = D.insurance.filter(i => i.id !== id);
+  save(); renderAll();
+}
+
+function saveEPF() {
+  D.epf = {
+    uan: document.getElementById('m-epf-uan').value,
+    balance: +document.getElementById('m-epf-bal').value || 0,
+    empShare: +document.getElementById('m-epf-emp').value || 0,
+    erShare: +document.getElementById('m-epf-er').value || 0,
+    monthly: +document.getElementById('m-epf-monthly').value || 0,
+    updated: todayStr()
+  };
+  snapshotNW(); save(); renderAll(); closeModal('epfModal');
+}
+
+function saveNPS() {
+  D.nps = {
+    pran: document.getElementById('m-nps-pran').value,
+    tier1: +document.getElementById('m-nps-t1').value || 0,
+    tier2: +document.getElementById('m-nps-t2').value || 0,
+    fyContrib: +document.getElementById('m-nps-contrib').value || 0,
+    monthly: +document.getElementById('m-nps-sip').value || 0,
+    equityPct: +document.getElementById('m-nps-eq').value || 75
+  };
+  snapshotNW(); save(); renderAll(); closeModal('npsModal');
+}
+
+function saveTax() {
+  D.tax = {
+    gross: +document.getElementById('m-tax-gross').value || 0,
+    s80c: Math.min(+document.getElementById('m-tax-80c').value || 0, 150000),
+    s80ccd: Math.min(+document.getElementById('m-tax-nps').value || 0, 50000),
+    s24b: Math.min(+document.getElementById('m-tax-hl').value || 0, 200000),
+    s80d: Math.min(+document.getElementById('m-tax-80d').value || 0, 75000),
+    hra: +document.getElementById('m-tax-hra').value || 0
+  };
+  save(); renderAll(); closeModal('taxModal');
+}
+
+function saveTxn() {
+  const t = {
+    id: Date.now(),
+    desc: document.getElementById('m-txn-desc').value,
+    amount: +document.getElementById('m-txn-amt').value || 0,
+    type: document.getElementById('m-txn-type').value,
+    cat: document.getElementById('m-txn-cat').value,
+    member: document.getElementById('m-txn-member').value,
+    date: document.getElementById('m-txn-date').value || new Date().toISOString().split('T')[0]
+  };
+  if (!t.desc || !t.amount) return;
+  D.transactions.unshift(t);
+  save(); renderAll(); closeModal('txnModal');
+  document.getElementById('m-txn-desc').value = '';
+  document.getElementById('m-txn-amt').value = '';
+}
+
+function saveBudget() {
+  const rows = document.querySelectorAll('#budget-form-rows .budget-form-row');
+  rows.forEach(row => {
+    const cat = row.dataset.cat;
+    const val = +row.querySelector('input').value || 0;
+    D.budgets[cat] = val;
+  });
+  save(); renderAll(); closeModal('budgetModal');
+}
+
+function goldRateChanged() {
+  const rate = +document.getElementById('gold-rate-input').value || 7500;
+  D.goldRate = rate;
+  save(); renderGold(); renderOv();
+}
+
+// ─────────────────────────────────────────────
+// UPSERT HELPER
+// ─────────────────────────────────────────────
+function upsert(arr, item) {
+  const i = arr.findIndex(x => x.id === item.id);
+  if (i >= 0) arr[i] = item;
+  else arr.push(item);
+}
+
+// ─────────────────────────────────────────────
+// NET WORTH
+// ─────────────────────────────────────────────
+function calcNW() {
+  const liq = D.accounts.reduce((s, a) => s + a.balance, 0);
+  const inv = D.investments.reduce((s, i) => s + i.value, 0);
+  const prop = D.properties.reduce((s, p) => s + p.value, 0);
+  const goldVal = calcGoldValue();
+  const ret = D.epf.balance + D.nps.tier1 + D.nps.tier2;
+  const loanLiab = D.loans.reduce((s, l) => s + l.outstanding, 0);
+  const cardLiab = D.cards.reduce((s, c) => s + c.outstanding, 0);
+  return liq + inv + prop + goldVal + ret - loanLiab - cardLiab;
+}
+
+function calcGoldValue() {
+  const rate = D.goldRate || 7500;
+  return D.gold.reduce((s, g) => {
+    const purityFactor = (g.purity || 22) / 24;
+    return s + g.weight * purityFactor * rate;
+  }, 0);
+}
+
+function snapshotNW() {
+  const nw = calcNW();
+  const month = new Date().toLocaleDateString('en-IN',{month:'short',year:'2-digit'});
+  const i = D.nwHistory.findIndex(h => h.m === month);
+  if (i >= 0) D.nwHistory[i].v = nw;
+  else D.nwHistory.push({m: month, v: nw});
+  if (D.nwHistory.length > 12) D.nwHistory.shift();
+}
+
+// ─────────────────────────────────────────────
+// TAX CALC
+// ─────────────────────────────────────────────
+function oldTax(txbl) {
+  if (txbl <= 250000) return 0;
+  let t = 0;
+  if (txbl > 1000000) t += (txbl - 1000000) * 0.3;
+  if (txbl > 500000) t += (Math.min(txbl, 1000000) - 500000) * 0.2;
+  if (txbl > 250000) t += (Math.min(txbl, 500000) - 250000) * 0.05;
+  return Math.round(t * 1.04);
+}
+
+function newTax(inc) {
+  const txbl = Math.max(0, inc - 75000);
+  if (txbl <= 400000) return 0;
+  let t = 0;
+  [[400000,800000,.05],[800000,1200000,.1],[1200000,1600000,.15],[1600000,2000000,.2],[2000000,2400000,.25],[2400000,Infinity,.3]]
+    .forEach(([lo,hi,r]) => { if (txbl > lo) t += (Math.min(txbl, hi) - lo) * r; });
+  return Math.round(t * 1.04);
+}
+
+// ─────────────────────────────────────────────
+// RENDER ALL
+// ─────────────────────────────────────────────
+function renderAll() {
+  renderOv();
+  renderAccounts();
+  renderCards();
+  renderRewards();
+  renderProperty();
+  renderGold();
+  renderInv();
+  renderEPF();
+  renderNPS();
+  renderLoans();
+  renderIns();
+  renderBudget();
+  renderTax();
+  renderTxns();
+}
+
+// ─────────────────────────────────────────────
+// OVERVIEW
+// ─────────────────────────────────────────────
+function renderOv() {
+  const accs = filterByMember(D.accounts);
+  const liq = accs.reduce((s, a) => s + a.balance, 0);
+  const props = filterByMember(D.properties);
+  const propVal = props.reduce((s, p) => s + p.value, 0);
+  const invs = filterByMember(D.investments);
+  const inv = invs.reduce((s, i) => s + i.value, 0);
+  const goldVal = filterByMember(D.gold).reduce((s, g) => {
+    return s + g.weight * ((g.purity||22)/24) * (D.goldRate||7500);
+  }, 0);
+  const loans = filterByMember(D.loans);
+  const cards = filterByMember(D.cards);
+  const loanLiab = loans.reduce((s, l) => s + l.outstanding, 0);
+  const cardLiab = cards.reduce((s, c) => s + c.outstanding, 0);
+  const totalLiab = loanLiab + cardLiab;
+  const nw = liq + propVal + inv + goldVal + D.epf.balance + D.nps.tier1 + D.nps.tier2 - totalLiab;
+
+  document.getElementById('ov-nw').textContent = fmt(nw);
+  document.getElementById('ov-liquid').textContent = fmt(liq);
+  document.getElementById('ov-prop').textContent = fmt(propVal);
+  document.getElementById('ov-inv').textContent = fmt(inv + goldVal);
+  document.getElementById('ov-liab').textContent = '−' + fmt(totalLiab);
+
+  // NW delta
+  const hist = D.nwHistory;
+  if (hist.length >= 2) {
+    const prev = hist[hist.length - 2].v;
+    const fullNw = calcNW();
+    const pct = prev ? ((fullNw - prev) / Math.abs(prev) * 100).toFixed(1) : 0;
+    const el = document.getElementById('ov-nw-delta');
+    el.style.display = 'inline-flex';
+    el.textContent = (pct >= 0 ? '↑' : '↓') + ' ' + Math.abs(pct) + '% vs last month';
+    el.className = 'card-delta ' + (pct >= 0 ? 'delta-up' : 'delta-down');
+  }
+
+  // Asset breakdown
+  const totalAssets = liq + propVal + inv + goldVal + D.epf.balance + D.nps.tier1 + D.nps.tier2;
+  const assetEl = document.getElementById('ov-assets-breakdown');
+  if (totalAssets === 0) {
+    assetEl.innerHTML = '<div class="empty-state"><div class="empty-icon">◈</div>Add assets to see breakdown</div>';
+  } else {
+    const segments = [
+      {label:'Liquid', val:liq, color:'var(--accent2)'},
+      {label:'Property', val:propVal, color:'#4a6fa5'},
+      {label:'Investments', val:inv, color:'var(--accent3)'},
+      {label:'Gold', val:goldVal, color:'var(--accent)'},
+      {label:'EPF/NPS', val:D.epf.balance+D.nps.tier1+D.nps.tier2, color:'var(--green)'},
+    ].filter(s => s.val > 0);
+    assetEl.innerHTML = segments.map(s => {
+      const pct = (s.val / totalAssets * 100).toFixed(1);
+      return `<div class="spend-row">
+        <div class="spend-label">${s.label}</div>
+        <div class="spend-bar-wrap"><div class="spend-bar-fill" style="width:${pct}%;background:${s.color}"></div></div>
+        <div class="spend-val">${lk(s.val)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Loans mini
+  const loanEl = document.getElementById('ov-loans-mini');
+  const activeLoans = filterByMember(D.loans);
+  if (!activeLoans.length) {
+    loanEl.innerHTML = '<div class="empty-state"><div class="empty-icon">≈</div>No loans</div>';
+  } else {
+    loanEl.innerHTML = activeLoans.slice(0, 3).map(l => {
+      const typeColors = {home:'var(--accent)',car:'var(--accent2)',personal:'var(--accent3)',education:'var(--green)',other:'var(--muted)'};
+      return `<div class="data-row">
+        <div class="row-left">
+          <div class="row-icon" style="background:rgba(181,129,58,.1)">≈</div>
+          <div><div class="row-name">${l.name}</div><div class="row-sub">${memberTag(l.member)} · EMI ${fmt(l.emi)}/mo</div></div>
+        </div>
+        <div class="row-right"><div class="row-val negative">${fmt(l.outstanding)}</div></div>
+      </div>`;
+    }).join('');
+  }
+
+  // Insurance due
+  const insEl = document.getElementById('ov-insurance');
+  const upcoming = filterByMember(D.insurance).filter(p => {
+    const d = daysUntil(p.dueDate); return d !== null && d <= 45;
+  }).sort((a, b) => daysUntil(a.dueDate) - daysUntil(b.dueDate));
+  if (!upcoming.length) {
+    insEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">No renewals in next 45 days ✓</div>';
+  } else {
+    insEl.innerHTML = upcoming.map(p => {
+      const d = daysUntil(p.dueDate);
+      return `<div class="data-row">
+        <div class="row-left">
+          <span style="font-size:16px">${{life:'🛡',health:'❤️',auto:'🚗',other:'📋'}[p.type]||'📋'}</span>
+          <div><div class="row-name">${p.name}</div><div class="row-sub">${p.insurer}</div></div>
+        </div>
+        <div class="row-right">
+          <div class="row-val ${d<=7?'negative':''}" style="font-size:12px">${d<=0?'OVERDUE':d+' days'}</div>
+          <div style="font-size:10px;color:var(--muted)">${fmt(p.premium)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  renderSpend();
+  renderNWChart();
+  renderAlerts();
+  renderMemberNW();
+}
+
+function renderMemberNW() {
+  const el = document.getElementById('ov-member-nw');
+  const members = ['madhu','sailaja','parents','charan','himaja'];
+  const memberData = members.map(m => {
+    const liq = D.accounts.filter(a => a.member === m || a.member === 'joint').reduce((s,a) => s+a.balance,0);
+    const propV = D.properties.filter(p => p.member === m || p.member === 'joint').reduce((s,p) => s+p.value,0);
+    const inv = D.investments.filter(i => i.member === m || i.member === 'joint').reduce((s,i) => s+i.value,0);
+    const goldV = D.gold.filter(g => g.member === m || g.member === 'joint').reduce((s,g) => s+g.weight*((g.purity||22)/24)*(D.goldRate||7500),0);
+    const loans = D.loans.filter(l => l.member === m || l.member === 'joint').reduce((s,l) => s+l.outstanding,0);
+    const cards = D.cards.filter(c => c.member === m || c.member === 'joint').reduce((s,c) => s+c.outstanding,0);
+    return {m, nw: liq + propV + inv + goldV - loans - cards};
+  }).filter(x => x.nw !== 0);
+
+  if (!memberData.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">◈</div>Add data to see member breakdown</div>';
+    return;
+  }
+  const max = Math.max(...memberData.map(x => Math.abs(x.nw)));
+  el.innerHTML = memberData.map(x => `
+    <div class="spend-row">
+      <div class="spend-label" style="display:flex;align-items:center;gap:6px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${MEMBER_COLORS[x.m]};display:inline-block;flex-shrink:0"></span>
+        ${MEMBER_NAMES[x.m]}
+      </div>
+      <div class="spend-bar-wrap"><div class="spend-bar-fill" style="width:${(Math.abs(x.nw)/max*100).toFixed(0)}%;background:${MEMBER_COLORS[x.m]}"></div></div>
+      <div class="spend-val">${lk(x.nw)}</div>
+    </div>`).join('');
+}
+
+function renderSpend() {
+  const cats = {};
+  const cm = new Date().getMonth();
+  const cy = new Date().getFullYear();
+  filterByMember(D.transactions).filter(t =>
+    t.type === 'debit' &&
+    new Date(t.date).getMonth() === cm &&
+    new Date(t.date).getFullYear() === cy
+  ).forEach(t => { cats[t.cat] = (cats[t.cat]||0) + t.amount; });
+  const el = document.getElementById('ov-spend');
+  if (!Object.keys(cats).length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>No transactions this month</div>';
+    return;
+  }
+  const total = Object.values(cats).reduce((a,b)=>a+b,0);
+  const colors = ['#b5813a','#4a7c6f','#7b5ea7','#3a7d54','#c0692b','#4a6fa5','#7ab8a0','#b8a07e'];
+  el.innerHTML = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i) =>
+    `<div class="spend-row">
+      <div class="spend-label">${cat}</div>
+      <div class="spend-bar-wrap"><div class="spend-bar-fill" style="width:${(amt/total*100).toFixed(0)}%;background:${colors[i%colors.length]}"></div></div>
+      <div class="spend-val">${fmt(amt)}</div>
+    </div>`
+  ).join('');
+}
+
+function renderNWChart() {
+  const hist = D.nwHistory;
+  if (hist.length < 2) return;
+  const vals = hist.map(h => h.v);
+  const min = Math.min(...vals) * .95, max = Math.max(...vals) * 1.05 || 1;
+  const W = 400, H = 100;
+  const pts = vals.map((v,i) => [(i/(vals.length-1))*W, H - ((v-min)/(max-min))*H]);
+  const line = pts.map((p,i) => (i?'L':'M')+p[0]+','+p[1]).join(' ');
+  document.getElementById('nwLine').setAttribute('d', line);
+  document.getElementById('nwFill').setAttribute('d', line + ` L${pts[pts.length-1][0]},${H} L0,${H} Z`);
+  document.getElementById('nwDots').innerHTML = pts.map(p =>
+    `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="#b5813a" stroke="#fff" stroke-width="1.5"/>`
+  ).join('');
+  document.getElementById('nwLabels').innerHTML = hist.map(h =>
+    `<span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted)">${h.m}</span>`
+  ).join('');
+}
+
+function renderAlerts() {
+  const alerts = [];
+  const cardOut = filterByMember(D.cards).reduce((s,c)=>s+c.outstanding,0);
+  if (cardOut > 0) alerts.push({type:'warn', msg:`Card outstanding of ${fmt(cardOut)} — clear before interest kicks in.`});
+  const t = D.tax;
+  if (t.gross > 0 && t.s80c < 150000) alerts.push({type:'info', msg:`Section 80C: ${fmt(150000-t.s80c)} headroom remaining.`});
+  if (D.nps.fyContrib < 50000 && t.gross > 0) alerts.push({type:'info', msg:`NPS 80CCD(1B): ${fmt(50000-D.nps.fyContrib)} unused — worth ${fmt((50000-D.nps.fyContrib)*.312)} in tax savings.`});
+  D.insurance.filter(p => { const d=daysUntil(p.dueDate); return d!==null&&d<=30; }).forEach(p => {
+    const d = daysUntil(p.dueDate);
+    alerts.push({type:d<=0?'danger':'warn', msg:`${p.name} premium ${d<=0?'OVERDUE':'due in '+d+' days'} — ${fmt(p.premium)}`});
+  });
+  D.properties.filter(p => { const d=daysUntil(p.propTaxDue); return d!==null&&d<=30&&d>0; }).forEach(p => {
+    alerts.push({type:'warn', msg:`Property tax for ${p.name} due in ${daysUntil(p.propTaxDue)} days — ${fmt(p.propTax)}`});
+  });
+  const el = document.getElementById('ov-alerts');
+  if (!alerts.length) {
+    el.innerHTML = '<div class="alert alert-success"><span>✓</span><span>All clear — no immediate action items.</span></div>';
+    return;
+  }
+  const icons = {warn:'⚡',info:'ℹ',danger:'🔴',success:'✓'};
+  el.innerHTML = alerts.slice(0,4).map(a =>
+    `<div class="alert alert-${a.type}"><span>${icons[a.type]}</span><span>${a.msg}</span></div>`
+  ).join('');
+}
+
+// ─────────────────────────────────────────────
+// ACCOUNTS
+// ─────────────────────────────────────────────
+function renderAccounts() {
+  const list = filterByMember(D.accounts);
+  const el = document.getElementById('acc-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">⬡</div>No accounts added</div>';
+    return;
+  }
+  el.innerHTML = list.map(a => `
+    <div class="data-row">
+      <div class="row-left">
+        <div class="row-icon" style="background:var(--accent2-light);font-size:16px">⬡</div>
+        <div>
+          <div class="row-name">${a.name} ${memberTag(a.member)}</div>
+          <div class="row-sub">${a.type} · Updated ${a.updated||'—'}</div>
+        </div>
+      </div>
+      <div class="row-right">
+        <div class="row-val">${fmt(a.balance)}</div>
+        <div style="font-size:10px;color:var(--green)">+${fmt(a.credits)} &nbsp;<span style="color:var(--red)">−${fmt(a.debits)}</span>/mo</div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+// ─────────────────────────────────────────────
+// CARDS
+// ─────────────────────────────────────────────
+function renderCards() {
+  const list = filterByMember(D.cards);
+  const total = list.reduce((s,c)=>s+c.outstanding,0);
+  const limit = list.reduce((s,c)=>s+c.limit,0);
+  const cm = new Date().getMonth();
+  const mtd = filterByMember(D.transactions).filter(t=>t.type==='debit'&&new Date(t.date).getMonth()===cm).reduce((s,t)=>s+t.amount,0);
+  document.getElementById('cards-total').textContent = '−'+fmt(total);
+  document.getElementById('cards-mtd').textContent = fmt(mtd);
+  document.getElementById('cards-limit').textContent = fmt(limit);
+  const el = document.getElementById('card-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">▭</div>No cards added</div>';
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const util = c.limit ? Math.round(c.outstanding/c.limit*100) : 0;
+    const utilColor = util > 50 ? 'var(--red)' : util > 30 ? 'var(--orange)' : 'var(--green)';
+    return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-size:13px;font-weight:500">${c.name} ${memberTag(c.member)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Due: ${c.dueDate||'—'} · Min: ${fmt(c.minDue)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="row-val negative">−${fmt(c.outstanding)}</div>
+          <div style="font-size:10px;color:var(--muted)">of ${fmt(c.limit)} limit</div>
+        </div>
+      </div>
+      <div class="progress-wrap" style="margin:0">
+        <div class="progress-label"><span>Utilization</span><span>${util}%</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(util,100)}%;background:${utilColor}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// REWARDS
+// ─────────────────────────────────────────────
+function renderRewards() {
+  const a = D.rewards['amex'], ic = D.rewards['icici-cc'];
+  document.getElementById('rw-amex-pts').textContent = a.points.toLocaleString('en-IN');
+  document.getElementById('rw-icici-pts').textContent = ic.points.toLocaleString('en-IN');
+  document.getElementById('rw-amex-big').textContent = a.points.toLocaleString('en-IN');
+  document.getElementById('rw-icici-big').textContent = ic.points.toLocaleString('en-IN');
+  const av = a.points * a.rate, iv = ic.points * ic.rate;
+  document.getElementById('rw-total-val').textContent = fmt(av+iv);
+  document.getElementById('rw-amex-val').textContent = '≈ '+fmt(av)+' value';
+  document.getElementById('rw-icici-val').textContent = '≈ '+fmt(iv)+' value';
+  document.getElementById('rw-amex-tier').textContent = a.tier || '—';
+}
+
+// ─────────────────────────────────────────────
+// PROPERTY
+// ─────────────────────────────────────────────
+function renderProperty() {
+  const list = filterByMember(D.properties);
+  const totalVal = list.reduce((s,p)=>s+p.value,0);
+  const totalCost = list.reduce((s,p)=>s+p.cost,0);
+  const totalGain = totalVal - totalCost;
+  document.getElementById('prop-total-val').textContent = fmt(totalVal);
+  document.getElementById('prop-total-cost').textContent = fmt(totalCost);
+  document.getElementById('prop-total-gain').textContent = (totalGain >= 0 ? '+' : '−') + fmt(totalGain);
+  document.getElementById('prop-total-gain').className = 'card-value ' + (totalGain >= 0 ? 'positive' : 'negative');
+  document.getElementById('prop-count').textContent = list.length;
+  document.getElementById('prop-cap-gain').textContent = (totalGain >= 0 ? '+' : '−') + fmt(Math.abs(totalGain));
+
+  // Property type summary
+  const byType = {};
+  list.forEach(p => { byType[p.type] = (byType[p.type]||0) + 1; });
+  document.getElementById('prop-summary-flat').textContent = byType['flat'] ? byType['flat'] + ' property/ies' : '—';
+  document.getElementById('prop-summary-house').textContent = byType['house'] ? byType['house'] + ' property/ies' : '—';
+  document.getElementById('prop-summary-plot').textContent = byType['plot'] ? byType['plot'] + ' property/ies' : '—';
+
+  // Property tax due
+  const taxDue = list.filter(p => { const d=daysUntil(p.propTaxDue); return d!==null&&d<=90&&d>0; });
+  document.getElementById('prop-tax-due').textContent = taxDue.length ? taxDue.length + ' due soon' : '—';
+
+  // Tax calendar
+  const taxListEl = document.getElementById('prop-tax-list');
+  const withTax = list.filter(p => p.propTaxDue);
+  if (!withTax.length) {
+    taxListEl.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>No property tax dates set</div>';
+  } else {
+    taxListEl.innerHTML = withTax.sort((a,b)=>new Date(a.propTaxDue)-new Date(b.propTaxDue)).map(p => {
+      const d = daysUntil(p.propTaxDue);
+      return `<div class="data-row">
+        <div><div style="font-size:12px;font-weight:500">${p.name}</div><div style="font-size:10px;color:var(--muted)">${p.propTaxDue}</div></div>
+        <div style="text-align:right">
+          <div class="${d<=0?'row-val negative':d<=30?'':'row-val'}" style="font-size:12px;color:${d<=0?'var(--red)':d<=30?'var(--accent)':'var(--text2)'}">${d<=0?'OVERDUE':d+' days'}</div>
+          <div style="font-size:10px;color:var(--muted)">${fmt(p.propTax)}/yr</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Property list
+  const listEl = document.getElementById('prop-list');
+  if (!list.length) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⌂</div>No properties added yet</div>';
+    return;
+  }
+
+  const typeLabels = {flat:'Residential Flat',house:'House / Villa',plot:'Plot / Land',commercial:'Commercial',agri:'Agricultural'};
+  const typeClasses = {flat:'prop-flat',house:'prop-house',plot:'prop-plot',commercial:'prop-commercial',agri:'prop-agri'};
+  const typeIcons = {flat:'🏢',house:'🏠',plot:'🌿',commercial:'🏗',agri:'🌾'};
+
+  listEl.innerHTML = list.map(p => {
+    const gain = p.value - p.cost;
+    const gainPct = p.cost ? (gain/p.cost*100).toFixed(1) : 0;
+    const d = daysUntil(p.propTaxDue);
+    const taxUrgent = d !== null && d <= 30 && d > 0;
+    const linkedLoan = p.linkedLoan ? D.loans.find(l => l.id === +p.linkedLoan) : null;
+    return `<div class="prop-card">
+      <div class="prop-card-header">
+        <div>
+          <span class="prop-type-badge ${typeClasses[p.type]}">${typeIcons[p.type]} ${typeLabels[p.type]}</span>
+          <div class="prop-name" style="margin-top:6px">${p.name}</div>
+          <div class="prop-location">${p.location||''} ${memberTag(p.member)}</div>
+          ${p.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:4px">${p.notes}</div>` : ''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--text)">${fmt(p.value)}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">Market value</div>
+          ${gain !== 0 ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:${gain>=0?'var(--green)':'var(--red)'};margin-top:3px">${gain>=0?'+':''}${gainPct}% gain</div>` : ''}
+        </div>
+      </div>
+      <div class="prop-meta">
+        <div class="prop-meta-item"><div class="prop-meta-label">Purchase Price</div><div class="prop-meta-val">${fmt(p.cost)}</div></div>
+        <div class="prop-meta-item"><div class="prop-meta-label">Unrealised Gain</div><div class="prop-meta-val ${gain>=0?'prop-gain':'prop-loss'}">${gain>=0?'+':''}${fmt(Math.abs(gain))}</div></div>
+        <div class="prop-meta-item"><div class="prop-meta-label">Area</div><div class="prop-meta-val">${p.area ? p.area.toLocaleString()+' sq.ft' : '—'}</div></div>
+        <div class="prop-meta-item"><div class="prop-meta-label">Purchased</div><div class="prop-meta-val">${p.purchaseDate||'—'}</div></div>
+      </div>
+      ${linkedLoan ? `<div style="margin-top:10px;padding:8px 10px;background:var(--surface2);border-radius:7px;font-size:11px;color:var(--muted)">Linked loan: <strong style="color:var(--text)">${linkedLoan.name}</strong> — Outstanding ${fmt(linkedLoan.outstanding)}, EMI ${fmt(linkedLoan.emi)}/mo</div>` : ''}
+      ${taxUrgent ? `<div style="margin-top:8px;" class="alert alert-warn" style="padding:6px 10px"><span>⚡</span><span>Property tax due in ${d} days — ${fmt(p.propTax)}</span></div>` : ''}
+      <div class="prop-actions">
+        <button class="btn btn-sm" onclick="openEditProp(${p.id})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProp(${p.id})">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// GOLD
+// ─────────────────────────────────────────────
+function renderGold() {
+  const rate = D.goldRate || 7500;
+  document.getElementById('gold-rate-input').value = rate;
+  const list = filterByMember(D.gold);
+  const totalWt = list.reduce((s,g)=>s+g.weight,0);
+  const totalVal = list.reduce((s,g)=>s+g.weight*((g.purity||22)/24)*rate,0);
+  const totalCost = list.reduce((s,g)=>s+g.cost,0);
+  const totalGain = totalVal - totalCost;
+  document.getElementById('gold-total-val').textContent = fmt(totalVal);
+  document.getElementById('gold-total-wt').textContent = totalWt.toFixed(1) + ' g';
+  document.getElementById('gold-total-gain').textContent = (totalGain>=0?'+':'−') + fmt(Math.abs(totalGain));
+  document.getElementById('gold-total-gain').className = 'card-value ' + (totalGain >= 0 ? 'positive' : 'negative');
+
+  const el = document.getElementById('gold-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">◎</div>No gold holdings added</div>';
+  } else {
+    el.innerHTML = list.map(g => {
+      const val = g.weight * ((g.purity||22)/24) * rate;
+      const gain = val - g.cost;
+      return `<div class="gold-item">
+        <div class="gold-item-left">
+          <div class="row-icon" style="background:var(--accent-light);color:var(--accent)">◎</div>
+          <div>
+            <div class="row-name">${g.name} ${memberTag(g.member)}</div>
+            <div class="row-sub">${g.weight}g · ${g.purity}K · ${g.form}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="row-val">${fmt(val)}</div>
+          <div style="font-size:10px;color:${gain>=0?'var(--green)':'var(--red)'}">${gain>=0?'+':'−'}${fmt(Math.abs(gain))} gain</div>
+          <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:5px">
+            <button class="btn btn-sm" style="padding:3px 7px;font-size:10px" onclick="openEditGold(${g.id})">Edit</button>
+            <button class="btn btn-danger btn-sm" style="padding:3px 7px;font-size:10px" onclick="deleteGold(${g.id})">✕</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // By member
+  const byMember = document.getElementById('gold-by-member');
+  const memberTotals = {};
+  D.gold.forEach(g => {
+    const v = g.weight * ((g.purity||22)/24) * rate;
+    memberTotals[g.member] = (memberTotals[g.member]||0) + v;
+  });
+  if (!Object.keys(memberTotals).length) {
+    byMember.innerHTML = '<div style="font-size:12px;color:var(--muted)">No data yet</div>';
+  } else {
+    byMember.innerHTML = Object.entries(memberTotals).map(([m,v]) =>
+      `<div class="data-row" style="padding:6px 0">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${MEMBER_COLORS[m]||'#999'};display:inline-block"></span>
+          <span style="font-size:12px">${MEMBER_NAMES[m]||m}</span>
+        </div>
+        <span style="font-family:'DM Mono',monospace;font-size:12px">${fmt(v)}</span>
+      </div>`
+    ).join('');
+  }
+}
+
+// ─────────────────────────────────────────────
+// INVESTMENTS
+// ─────────────────────────────────────────────
+function renderInv() {
+  const list = filterByMember(D.investments);
+  const cost = list.reduce((s,i)=>s+i.cost,0);
+  const val = list.reduce((s,i)=>s+i.value,0);
+  const pnl = val - cost;
+  document.getElementById('inv-cost').textContent = fmt(cost);
+  document.getElementById('inv-val').textContent = fmt(val);
+  const el = document.getElementById('inv-pnl');
+  el.textContent = (pnl>=0?'+':'−') + fmt(Math.abs(pnl));
+  el.className = 'card-value ' + (pnl >= 0 ? 'positive' : 'negative');
+  const tbody = document.getElementById('inv-rows');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">↗</div>No investments</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(inv => {
+    const r = inv.cost ? (((inv.value-inv.cost)/inv.cost)*100).toFixed(1) : 0;
+    return `<tr>
+      <td><div style="font-size:12px;font-weight:500">${inv.name}</div></td>
+      <td><span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">${inv.type}</span></td>
+      <td>${memberTag(inv.member)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(inv.cost)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(inv.value)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;color:${r>=0?'var(--green)':'var(--red)'}">${r>=0?'+':''}${r}%
+        <button onclick="deleteInv(${inv.id})" style="margin-left:8px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// EPF
+// ─────────────────────────────────────────────
+function renderEPF() {
+  const e = D.epf;
+  document.getElementById('epf-bal-display').textContent = fmt(e.balance);
+  document.getElementById('epf-monthly-display').textContent = fmt(e.monthly);
+  document.getElementById('epf-uan-d').textContent = e.uan || '—';
+  document.getElementById('epf-emp-d').textContent = fmt(e.empShare);
+  document.getElementById('epf-er-d').textContent = fmt(e.erShare);
+  document.getElementById('epf-int-d').textContent = fmt(Math.max(0,e.balance-e.empShare-e.erShare));
+  document.getElementById('epf-upd-d').textContent = e.updated || '—';
+  const annual = e.monthly * 12;
+  const pct = pf(annual, 150000);
+  document.getElementById('epf-80c-d').textContent = fmt(Math.min(annual,150000));
+  document.getElementById('epf-80c-pct').textContent = pct + '%';
+  document.getElementById('epf-80c-bar').style.width = pct + '%';
+}
+
+// ─────────────────────────────────────────────
+// NPS
+// ─────────────────────────────────────────────
+function renderNPS() {
+  const n = D.nps, tot = n.tier1 + n.tier2;
+  document.getElementById('nps-bal-d').textContent = fmt(tot);
+  document.getElementById('nps-sip-d').textContent = fmt(n.monthly);
+  document.getElementById('nps-tax-d').textContent = fmt(Math.min(n.fyContrib,50000)*.312);
+  document.getElementById('nps-pran-d').textContent = n.pran || '—';
+  document.getElementById('nps-t1-d').textContent = fmt(n.tier1);
+  document.getElementById('nps-t2-d').textContent = fmt(n.tier2);
+  document.getElementById('nps-contrib-d').textContent = fmt(n.fyContrib);
+  document.getElementById('nps-eq-d').textContent = (n.equityPct||75) + '%';
+  const pct = pf(n.fyContrib, 50000);
+  document.getElementById('nps-80ccd-pct').textContent = pct + '%';
+  document.getElementById('nps-80ccd-bar').style.width = pct + '%';
+  document.getElementById('nps-ctb-d').textContent = fmt(Math.min(n.fyContrib,50000));
+  document.getElementById('nps-rem-d').textContent = fmt(Math.max(0,50000-n.fyContrib));
+}
+
+// ─────────────────────────────────────────────
+// LOANS
+// ─────────────────────────────────────────────
+function renderLoans() {
+  const list = filterByMember(D.loans);
+  const totalOut = list.reduce((s,l)=>s+l.outstanding,0);
+  const totalEmi = list.reduce((s,l)=>s+l.emi,0);
+  const totalIntPaid = list.reduce((s,l)=>s+l.intPaid,0);
+  document.getElementById('loan-total').textContent = fmt(totalOut);
+  document.getElementById('loan-emi-total').textContent = fmt(totalEmi);
+  document.getElementById('loan-int-paid').textContent = fmt(totalIntPaid);
+  document.getElementById('loan-count').textContent = list.length;
+
+  const el = document.getElementById('loan-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">≈</div>No loans added</div>';
+  } else {
+    const typeClasses = {home:'loan-home',car:'loan-car',personal:'loan-personal',education:'loan-education',other:'loan-other'};
+    const typeLabels = {home:'Home Loan',car:'Car Loan',personal:'Personal',education:'Education',other:'Other'};
+    el.innerHTML = list.map(l => {
+      const paidPct = l.principal ? Math.round((1-(l.outstanding/l.principal))*100) : 0;
+      return `<div class="loan-card">
+        <div class="loan-card-header">
+          <div>
+            <span class="loan-type ${typeClasses[l.type]}">${typeLabels[l.type]||l.type}</span>
+            <div style="font-size:14px;font-weight:500;margin-top:5px">${l.name} ${memberTag(l.member)}</div>
+            <div style="font-size:11px;color:var(--muted)">${l.lender||''}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--red)">−${fmt(l.outstanding)}</div>
+            <div style="font-size:10px;color:var(--muted)">outstanding</div>
+          </div>
+        </div>
+        <div class="loan-meta">
+          <div><div class="loan-meta-label">EMI</div><div class="loan-meta-val" style="color:var(--accent)">${fmt(l.emi)}/mo</div></div>
+          <div><div class="loan-meta-label">Rate</div><div class="loan-meta-val">${l.rate||0}% p.a.</div></div>
+          <div><div class="loan-meta-label">Tenure Left</div><div class="loan-meta-val">${l.tenure||0} mo</div></div>
+          <div><div class="loan-meta-label">EMI Day</div><div class="loan-meta-val">${l.emiDay ? l.emiDay+'th' : '—'}</div></div>
+        </div>
+        <div class="emi-bar">
+          <div class="progress-wrap" style="margin-top:10px">
+            <div class="progress-label"><span>Principal repaid</span><span>${paidPct}%</span></div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${paidPct}%;background:var(--green)"></div></div>
+          </div>
+        </div>
+        <div class="prop-actions" style="margin-top:10px">
+          <button class="btn btn-sm" onclick="openEditLoan(${l.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteLoan(${l.id})">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // EMI calendar
+  const calEl = document.getElementById('loan-calendar');
+  if (!list.length) {
+    calEl.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>No upcoming EMIs</div>';
+  } else {
+    calEl.innerHTML = list.map(l => `
+      <div class="data-row">
+        <div><div style="font-size:12px;font-weight:500">${l.name}</div><div style="font-size:10px;color:var(--muted)">${l.lender||''} · Day ${l.emiDay||'—'}</div></div>
+        <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--accent)">${fmt(l.emi)}</div>
+      </div>`).join('');
+  }
+
+  // 24b home loan deduction
+  const homeLoanInt = D.loans.filter(l=>l.type==='home').reduce((s,l)=>s+l.intPaid,0);
+  const capped = Math.min(homeLoanInt, 200000);
+  document.getElementById('loan-24b-val').textContent = fmt(capped);
+  document.getElementById('loan-24b-pct').textContent = pf(homeLoanInt,200000) + '%';
+  document.getElementById('loan-24b-bar').style.width = pf(homeLoanInt,200000) + '%';
+}
+
+// ─────────────────────────────────────────────
+// INSURANCE
+// ─────────────────────────────────────────────
+function renderIns() {
+  const list = filterByMember(D.insurance);
+  const totalPremium = list.reduce((s,p)=>s+p.premium,0);
+  const lifeCover = list.filter(p=>p.type==='life').reduce((s,p)=>s+p.cover,0);
+  const healthCover = list.filter(p=>p.type==='health').reduce((s,p)=>s+p.cover,0);
+  document.getElementById('ins-total-premium').textContent = fmt(totalPremium);
+  document.getElementById('ins-life-cover').textContent = lifeCover >= 1e7 ? cr(lifeCover) : lk(lifeCover);
+  document.getElementById('ins-health-cover').textContent = lk(healthCover);
+  document.getElementById('ins-count').textContent = list.length;
+
+  const listEl = document.getElementById('ins-list');
+  if (!list.length) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⛨</div>No policies added</div>';
+  } else {
+    const typeIcons = {life:'🛡',health:'❤️',auto:'🚗',other:'📋'};
+    const typeClasses = {life:'ins-life',health:'ins-health',auto:'ins-auto',other:'ins-life'};
+    const typeLabels = {life:'Life',health:'Health',auto:'Auto',other:'Other'};
+    listEl.innerHTML = list.map(p => {
+      const d = daysUntil(p.dueDate);
+      const urgent = d !== null ? (d <= 0 ? 'ins-overdue' : d <= 30 ? 'ins-due-soon' : '') : '';
+      const dueTxt = d === null ? '—' : d <= 0 ? `<span style="color:var(--red)">OVERDUE</span>` : d <= 30 ? `<span style="color:var(--accent)">${d} days</span>` : `${d} days`;
+      return `<div class="ins-card ${urgent}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <span class="ins-type-badge ${typeClasses[p.type]}">${typeIcons[p.type]} ${typeLabels[p.type]}</span>
+            <div style="font-size:13px;font-weight:500;margin-top:5px">${p.name} ${memberTag(p.member)}</div>
+            <div style="font-size:11px;color:var(--muted)">${p.insurer}${p.polno?' · '+p.polno:''}</div>
+          </div>
+          <div style="text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:var(--accent)">${fmt(p.premium)}<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">${p.freq||'annual'}</div></div>
+        </div>
+        <div class="ins-meta">
+          <div><div class="ins-meta-label">Cover</div><div class="ins-meta-val" style="color:var(--green)">${p.cover>=1e7?cr(p.cover):lk(p.cover)}</div></div>
+          <div><div class="ins-meta-label">Due Date</div><div class="ins-meta-val">${p.dueDate||'—'}</div></div>
+          <div><div class="ins-meta-label">Renewal In</div><div class="ins-meta-val">${dueTxt}</div></div>
+        </div>
+        <div class="prop-actions" style="margin-top:8px">
+          <button class="btn btn-sm" onclick="openEditIns(${p.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteIns(${p.id})">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Summary
+  const lifeEl = list.filter(p=>p.type==='life');
+  const healthSelf = list.filter(p=>p.type==='health'&&p.covered&&p.covered.some(c=>c.toLowerCase().includes('self')));
+  const healthFam = list.filter(p=>p.type==='health');
+  const autoEl = list.filter(p=>p.type==='auto');
+  document.getElementById('ins-life-summary').textContent = lifeEl.length ? lifeEl.length+' policy/ies · '+cr(lifeCover) : '—';
+  document.getElementById('ins-health-self').textContent = healthSelf.length ? fmt(healthSelf.reduce((s,p)=>s+p.cover,0)) : '—';
+  document.getElementById('ins-health-family').textContent = healthFam.length ? fmt(healthCover)+' total' : '—';
+  document.getElementById('ins-auto-summary').textContent = autoEl.length ? autoEl.length+' vehicle(s)' : '—';
+  const healthPremium = list.filter(p=>p.type==='health').reduce((s,p)=>s+p.premium,0);
+  const d80 = Math.min(healthPremium, 75000);
+  document.getElementById('ins-80d-val').textContent = fmt(d80);
+  document.getElementById('ins-80d-pct').textContent = pf(healthPremium,75000) + '%';
+  document.getElementById('ins-80d-bar').style.width = pf(healthPremium,75000) + '%';
+}
+
+// ─────────────────────────────────────────────
+// BUDGET
+// ─────────────────────────────────────────────
+function renderBudget() {
+  const cm = new Date().getMonth(), cy = new Date().getFullYear();
+  const pm = cm === 0 ? 11 : cm - 1, py = cm === 0 ? cy - 1 : cy;
+
+  const curSpend = {};
+  const prevSpend = {};
+  filterByMember(D.transactions).filter(t => t.type === 'debit').forEach(t => {
+    const d = new Date(t.date);
+    if (d.getMonth() === cm && d.getFullYear() === cy) curSpend[t.cat] = (curSpend[t.cat]||0) + t.amount;
+    if (d.getMonth() === pm && d.getFullYear() === py) prevSpend[t.cat] = (prevSpend[t.cat]||0) + t.amount;
+  });
+
+  const totalBudget = Object.values(D.budgets).reduce((s,v)=>s+v,0);
+  const totalActual = Object.values(curSpend).reduce((s,v)=>s+v,0);
+  const remaining = totalBudget - totalActual;
+
+  document.getElementById('bud-total').textContent = fmt(totalBudget);
+  document.getElementById('bud-actual').textContent = fmt(totalActual);
+  document.getElementById('bud-remaining').textContent = remaining >= 0 ? fmt(remaining) : '−'+fmt(Math.abs(remaining));
+  document.getElementById('bud-remaining').className = 'card-value ' + (remaining >= 0 ? 'positive' : 'negative');
+  document.getElementById('bud-pct').textContent = totalBudget ? Math.round(totalActual/totalBudget*100)+'%' : '0%';
+
+  // Budget bars
+  const barsEl = document.getElementById('budget-bars');
+  const cats = Object.keys(D.budgets);
+  const activeCats = cats.filter(cat => D.budgets[cat] > 0 || curSpend[cat] > 0);
+  if (!activeCats.length) {
+    barsEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⊞</div>Click "Edit Budgets" to set monthly limits</div>';
+  } else {
+    barsEl.innerHTML = activeCats.map(cat => {
+      const budget = D.budgets[cat] || 0;
+      const actual = curSpend[cat] || 0;
+      const pct = budget ? Math.min(Math.round(actual/budget*100),100) : 100;
+      const overBudget = budget > 0 && actual > budget;
+      const barColor = overBudget ? 'var(--red)' : pct > 75 ? 'var(--orange)' : 'var(--green)';
+      return `<div class="budget-row">
+        <div class="budget-label">${cat}</div>
+        <div class="budget-bars">
+          <div class="budget-bar-wrap">
+            ${budget > 0 ? `<div class="budget-bar-budget" style="width:100%"></div>` : ''}
+            <div class="budget-bar-actual" style="width:${budget?pct:100}%;background:${barColor}"></div>
+          </div>
+          <div class="budget-vals">
+            <span>${fmt(actual)} spent</span>
+            <span>${budget > 0 ? fmt(budget)+' budget' : 'no budget set'}</span>
+          </div>
+        </div>
+        <div class="budget-pct" style="color:${overBudget?'var(--red)':pct>75?'var(--orange)':'var(--muted)'}">${budget?pct+'%':'—'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Compare
+  const compareEl = document.getElementById('budget-compare');
+  const allCats = new Set([...Object.keys(curSpend), ...Object.keys(prevSpend)]);
+  if (!allCats.size) {
+    compareEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⊞</div>Not enough data yet</div>';
+  } else {
+    compareEl.innerHTML = [...allCats].map(cat => {
+      const cur = curSpend[cat]||0;
+      const prev = prevSpend[cat]||0;
+      const delta = cur - prev;
+      return `<div class="data-row" style="padding:7px 0">
+        <div style="font-size:12px;color:var(--text2)">${cat}</div>
+        <div style="text-align:right">
+          <div style="font-family:'DM Mono',monospace;font-size:12px">${fmt(cur)}</div>
+          <div style="font-size:10px;color:${delta>0?'var(--red)':delta<0?'var(--green)':'var(--muted)'}">
+            ${delta>0?'▲ +'+fmt(delta):delta<0?'▼ '+fmt(Math.abs(delta)):'same'} vs last mo
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Build budget form
+  const formEl = document.getElementById('budget-form-rows');
+  formEl.innerHTML = Object.keys(D.budgets).map(cat =>
+    `<div class="budget-form-row form-group" data-cat="${cat}">
+      <label class="form-label">${cat}</label>
+      <input class="form-input" type="number" placeholder="0" value="${D.budgets[cat]||''}">
+    </div>`
+  ).join('');
+}
+
+// ─────────────────────────────────────────────
+// TAX
+// ─────────────────────────────────────────────
+function renderTax() {
+  const t = D.tax;
+  const totalDed = t.s80c + t.s80ccd + t.s24b + t.s80d + t.hra + 75000;
+  const taxable = Math.max(0, t.gross - totalDed);
+  const ot = oldTax(taxable), nt = newTax(t.gross);
+  const saving = nt - ot;
+  document.getElementById('tax-gross-d').textContent = fmt(t.gross);
+  document.getElementById('tax-ded-d').textContent = fmt(totalDed);
+  document.getElementById('tax-txbl-d').textContent = fmt(taxable);
+  document.getElementById('tax-best-d').textContent = fmt(Math.min(ot,nt));
+  document.getElementById('t-80c').textContent = fmt(t.s80c)+' / ₹1,50,000';
+  document.getElementById('t-80ccd').textContent = fmt(t.s80ccd)+' / ₹50,000';
+  document.getElementById('t-24b').textContent = fmt(t.s24b)+' / ₹2,00,000';
+  document.getElementById('t-80d').textContent = fmt(t.s80d)+' / ₹25,000';
+  document.getElementById('t-hra').textContent = fmt(t.hra);
+  document.getElementById('bar-80c').style.width = pf(t.s80c,150000)+'%';
+  document.getElementById('bar-80ccd').style.width = pf(t.s80ccd,50000)+'%';
+  document.getElementById('bar-24b').style.width = pf(t.s24b,200000)+'%';
+  document.getElementById('bar-80d').style.width = pf(t.s80d,25000)+'%';
+  document.getElementById('old-tax').textContent = fmt(ot);
+  document.getElementById('new-tax').textContent = fmt(nt);
+  const vEl = document.getElementById('tax-verdict');
+  const rEl = document.getElementById('old-rec');
+  if (t.gross > 0) {
+    if (saving > 0) {
+      vEl.className = 'alert alert-success';
+      vEl.innerHTML = `<span>✓</span><span>Old Regime saves ${fmt(saving)} vs New Regime. Keep maximizing deductions.</span>`;
+      rEl.innerHTML = '<span class="badge badge-success">RECOMMENDED</span>';
+    } else {
+      vEl.className = 'alert alert-warn';
+      vEl.innerHTML = `<span>⚡</span><span>New Regime is ${fmt(Math.abs(saving))} cheaper. Consider switching.</span>`;
+      rEl.innerHTML = '';
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// TRANSACTIONS
+// ─────────────────────────────────────────────
+function renderTxns() {
+  const list = filterByMember(D.transactions);
+  const el = document.getElementById('txn-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">≡</div>No transactions</div>';
+    return;
+  }
+  const catColors = {
+    'Food & Dining':'#b5813a','Travel':'#4a7c6f','Shopping':'#7b5ea7','Utilities':'#3a7d54',
+    'Entertainment':'#c0392b','Healthcare':'#4a6fa5','Education':'#c0692b','Insurance':'#7ab8a0',
+    'Investment':'#3a7d54','Salary':'#3a7d54','EMI':'#7b5ea7','Other':'#8a8279'
+  };
+  el.innerHTML = list.slice(0,60).map(t =>
+    `<div class="txn-row">
+      <div class="txn-left">
+        <div class="txn-dot" style="background:${catColors[t.cat]||'#8a8279'}"></div>
+        <div>
+          <div class="txn-name">${t.desc} ${memberTag(t.member)}</div>
+          <div class="txn-cat">${t.cat} · ${t.date}</div>
+        </div>
+      </div>
+      <div class="txn-amount ${t.type}">${t.type==='debit'?'−':'+'}${fmt(t.amount)}</div>
+    </div>`
+  ).join('');
+}
+
+// ─────────────────────────────────────────────
+// CSV IMPORT
+// ─────────────────────────────────────────────
+let selectedBank = 'icici-salary';
+let parsedRows = [];
+
+const BANK_CONFIGS = {
+  'icici-salary': {
+    label:'ICICI Bank (Savings/Salary)', account:'icici-salary',
+    hint:'ICICI CSV: Date, Description, Debit, Credit, Balance',
+    skipRows:1,
+    parse(row) {
+      if (!row[1]) return null;
+      const date = parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD');
+      if (!date) return null;
+      const debit = cleanAmt(row[2]), credit = cleanAmt(row[3]);
+      if (debit===0 && credit===0) return null;
+      return {date, desc:row[1].trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(row[1])};
+    }
+  },
+  'icici-cc': {
+    label:'ICICI Credit Card', account:'icici-cc',
+    hint:'ICICI CC CSV: Date, Description, Amount',
+    skipRows:1,
+    parse(row) {
+      if (!row[1]) return null;
+      const date = parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD');
+      if (!date) return null;
+      const amt = cleanAmt(row[2]||row[3]);
+      if (amt===0) return null;
+      const isCredit = (row[2]||'').trim()===''&&cleanAmt(row[3])>0;
+      return {date, desc:row[1].trim(), amount:Math.abs(amt), type:isCredit?'credit':'debit', cat:autoCategory(row[1])};
+    }
+  },
+  'sc': {
+    label:'Standard Chartered', account:'sc-savings',
+    hint:'SC CSV: Transaction Date, Description, Debit Amount, Credit Amount',
+    skipRows:1,
+    parse(row) {
+      if (!row[1]) return null;
+      const date = parseDate(row[0],'DD MMM YYYY') || parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD');
+      if (!date) return null;
+      const debit = cleanAmt(row[2]), credit = cleanAmt(row[3]);
+      if (debit===0&&credit===0) return null;
+      return {date, desc:row[1].trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(row[1])};
+    }
+  },
+  'amex': {
+    label:'American Express', account:'amex',
+    hint:'Amex CSV: Date, Description, Amount (positive=spend)',
+    skipRows:1,
+    parse(row) {
+      if (!row[1]) return null;
+      const date = parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD') || parseDate(row[0],'MM/DD/YYYY');
+      if (!date) return null;
+      const rawAmt = cleanAmtSigned(row[2]);
+      if (rawAmt===0) return null;
+      return {date, desc:row[1].trim(), amount:Math.abs(rawAmt), type:rawAmt>0?'debit':'credit', cat:autoCategory(row[1])};
+    }
+  }
+};
+
+function parseDate(str, fmt) {
+  if (!str) return null;
+  str = str.trim().replace(/"/g,'');
+  try {
+    if (fmt==='DD/MM/YYYY') {
+      const [d,m,y] = str.split('/');
+      if (!d||!m||!y) return null;
+      const dt = new Date(y,m-1,d);
+      return isNaN(dt)?null:dt.toISOString().split('T')[0];
+    }
+    if (fmt==='YYYY-MM-DD') {
+      const dt = new Date(str);
+      return isNaN(dt)?null:dt.toISOString().split('T')[0];
+    }
+    if (fmt==='DD MMM YYYY') {
+      const dt = new Date(str);
+      return isNaN(dt)?null:dt.toISOString().split('T')[0];
+    }
+    if (fmt==='MM/DD/YYYY') {
+      const [m,d,y] = str.split('/');
+      if (!d||!m||!y) return null;
+      const dt = new Date(y,m-1,d);
+      return isNaN(dt)?null:dt.toISOString().split('T')[0];
+    }
+  } catch(e) {}
+  const dt = new Date(str);
+  return isNaN(dt)?null:dt.toISOString().split('T')[0];
+}
+
+function cleanAmt(s) {
+  if (!s) return 0;
+  const n = parseFloat(String(s).replace(/[₹,"\s]/g,''));
+  return isNaN(n)||n<0?0:n;
+}
+
+function cleanAmtSigned(s) {
+  if (!s) return 0;
+  const n = parseFloat(String(s).replace(/[₹,"\s]/g,''));
+  return isNaN(n)?0:n;
+}
+
+function autoCategory(desc) {
+  if (!desc) return 'Other';
+  const d = desc.toLowerCase();
+  if (/swiggy|zomato|dominos|food|restaurant|cafe|biryani|pizza/i.test(d)) return 'Food & Dining';
+  if (/uber|ola|rapido|redbus|irctc|flight|airways|airline|train|makemytrip/i.test(d)) return 'Travel';
+  if (/amazon|flipkart|myntra|meesho|nykaa|blinkit|zepto|shopping/i.test(d)) return 'Shopping';
+  if (/electricity|water|gas|broadband|airtel|jio|bsnl|recharge|utility/i.test(d)) return 'Utilities';
+  if (/netflix|prime|hotstar|spotify|youtube|bookmyshow|pvr|inox/i.test(d)) return 'Entertainment';
+  if (/pharmacy|hospital|doctor|clinic|medplus|apollo|health|medical/i.test(d)) return 'Healthcare';
+  if (/school|college|udemy|coursera|education|tuition|fees/i.test(d)) return 'Education';
+  if (/insurance|lic|hdfc life|bajaj|star health/i.test(d)) return 'Insurance';
+  if (/mutual fund|sip|zerodha|groww|upstox|nse|bse|dividend/i.test(d)) return 'Investment';
+  if (/emi|loan|home loan|car loan/i.test(d)) return 'EMI';
+  if (/salary|credit|neft cr|upi cr|rtgs cr/i.test(d)) return 'Salary';
+  return 'Other';
+}
+
+function parseCSVLine(line) {
+  const result = []; let current = ''; let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuotes = !inQuotes; }
+    else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function selectBank(bank, btn) {
+  selectedBank = bank;
+  document.querySelectorAll('.bank-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const cfg = BANK_CONFIGS[bank];
+  document.getElementById('import-hint').textContent = cfg.hint;
+  document.getElementById('bank-format-info').innerHTML =
+    `<div class="alert alert-info"><span>ℹ</span><span><strong>${cfg.label}</strong> — ${cfg.hint}</span></div>`;
+  document.getElementById('parse-result').style.display = 'none';
+  parsedRows = [];
+}
+
+function parseCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const cfg = BANK_CONFIGS[selectedBank];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const lines = e.target.result.split('\n').filter(l => l.trim());
+    parsedRows = [];
+    const previewRows = [];
+    const skipped = cfg.skipRows || 1;
+    for (let i = 0; i < lines.length; i++) {
+      const row = parseCSVLine(lines[i]);
+      if (i < skipped) { previewRows.push({header:true,row}); continue; }
+      try {
+        const parsed = cfg.parse(row);
+        if (parsed) { parsedRows.push(parsed); if (previewRows.length < 8) previewRows.push({header:false,row:parsed}); }
+      } catch(ex) {}
+    }
+    const resultEl = document.getElementById('parse-result');
+    resultEl.style.display = 'block';
+    const statusEl = document.getElementById('parse-status-badge');
+    statusEl.innerHTML = parsedRows.length > 0
+      ? `<span class="parse-status parse-ok">✓ ${parsedRows.length} transactions found</span>`
+      : `<span class="parse-status" style="background:var(--red-light);color:var(--red)">✗ No transactions parsed</span>`;
+    const table = document.getElementById('parse-preview-table');
+    table.innerHTML = `<div class="parse-row"><div class="parse-cell parse-header val">Date</div><div class="parse-cell parse-header val">Description</div><div class="parse-cell parse-header val">Amount</div><div class="parse-cell parse-header val">Type</div><div class="parse-cell parse-header val">Category</div></div>` +
+      previewRows.filter(r=>!r.header).slice(0,8).map(r =>
+        `<div class="parse-row"><div class="parse-cell val">${r.row.date}</div><div class="parse-cell val">${r.row.desc}</div><div class="parse-cell val" style="color:var(--accent)">₹${r.row.amount.toLocaleString('en-IN')}</div><div class="parse-cell val" style="color:${r.row.type==='debit'?'var(--red)':'var(--green)'}">${r.row.type}</div><div class="parse-cell val">${r.row.cat}</div></div>`
+      ).join('');
+    document.getElementById('parse-summary').textContent =
+      `File: ${file.name} · ${lines.length-skipped} rows read · ${parsedRows.length} valid · ${lines.length-skipped-parsedRows.length} skipped`;
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function confirmImport() {
+  if (!parsedRows.length) return;
+  const cfg = BANK_CONFIGS[selectedBank];
+  const existing = new Set(D.transactions.map(t => t.date+'|'+t.desc+'|'+t.amount));
+  let added = 0, dupes = 0;
+  parsedRows.forEach(r => {
+    const key = r.date+'|'+r.desc+'|'+r.amount;
+    if (existing.has(key)) { dupes++; return; }
+    D.transactions.unshift({
+      id: Date.now()+Math.random(),
+      desc: r.desc, amount: r.amount, type: r.type,
+      cat: r.cat, member: currentMember === 'all' ? 'madhu' : currentMember,
+      date: r.date
+    });
+    added++;
+  });
+  D.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
+  save(); renderAll();
+  document.getElementById('parse-status-badge').innerHTML =
+    `<span class="parse-status parse-ok">✓ Imported ${added} · ${dupes} duplicates skipped</span>`;
+  const btn = document.getElementById('importConfirmBtn');
+  btn.textContent = 'Done ✓'; btn.disabled = true;
+  parsedRows = [];
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+load();
+document.getElementById('m-txn-date').value = new Date().toISOString().split('T')[0];
+selectBank('icici-salary', document.querySelector('.bank-tab'));
+renderAll();
+</script>
+</body>
+</html>
