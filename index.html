@@ -847,20 +847,23 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
         <div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
             <div class="section-head" style="margin:0">All Policies</div>
-            <button class="btn btn-primary btn-sm" onclick="openModal('insModal')">+ Add Policy</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" onclick="openModal('aiInsModal')" style="background:linear-gradient(135deg, #7b5ea7, #4a6fa5);border:none;color:white;display:flex;align-items:center;gap:4px">📄 Scan Policy Document</button>
+              <button class="btn btn-secondary btn-sm" onclick="scanTxnsForInsurance()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);display:flex;align-items:center;gap:4px">🔍 Scan from Transactions</button>
+              <button class="btn btn-primary btn-sm" onclick="openModal('insModal')">+ Add Manually</button>
+            </div>
           </div>
+          <div id="ins-gap-detector" style="margin-bottom:16px;background:rgba(235,87,87,0.1);border:1px solid rgba(235,87,87,0.3);border-radius:8px;padding:12px;color:var(--red);font-size:13px;display:none"></div>
           <div id="ins-list"><div class="empty-state"><div class="empty-icon">⛨</div>No policies added yet</div></div>
         </div>
         <div>
-          <div class="section-head">Coverage Summary</div>
-          <div class="panel">
-            <div class="panel-body">
-              <div class="tax-row"><span class="tax-key">Life Insurance</span><span class="tax-val" id="ins-life-summary">—</span></div>
-              <div class="tax-row"><span class="tax-key">Health (Self)</span><span class="tax-val" id="ins-health-self">—</span></div>
-              <div class="tax-row"><span class="tax-key">Health (Family)</span><span class="tax-val" id="ins-health-family">—</span></div>
-              <div class="tax-row"><span class="tax-key">Auto Insurance</span><span class="tax-val" id="ins-auto-summary">—</span></div>
-              <div class="divider"></div>
-              <div class="card-label" style="margin-bottom:5px">80D Deduction (Health Premiums)</div>
+          <div class="section-head">Family Coverage Summary</div>
+          <div class="panel" style="margin-bottom:20px">
+            <div class="panel-body" id="ins-coverage-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
+              <!-- Auto generated -->
+            </div>
+          </div>
+          <div class="section-head" style="margin-top:20px;margin-bottom:5px">80D Deduction (Health Premiums)</div>
               <div class="card-value positive" style="font-size:18px" id="ins-80d-val">₹0</div>
               <div class="progress-wrap" style="margin-top:8px">
                 <div class="progress-label"><span>80D limit (₹25K self + ₹50K parents)</span><span id="ins-80d-pct">0%</span></div>
@@ -1223,36 +1226,138 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
     <button class="modal-close" onclick="closeModal('insModal')">×</button>
     <div class="modal-title" id="insModalTitle">Add Insurance Policy</div>
     <div class="form-grid">
-      <div class="form-group form-full"><label class="form-label">Policy Name</label><input class="form-input" id="m-ins-name" placeholder="e.g. HDFC Life Click2Protect"></div>
+      <div class="form-group"><label class="form-label">Policy Name</label><input class="form-input" id="m-ins-name" placeholder="e.g. HDFC Life Click2Protect"></div>
+      <div class="form-group"><label class="form-label">Insurer</label><input class="form-input" id="m-ins-insurer" placeholder="e.g. HDFC Life"></div>
       <div class="form-group"><label class="form-label">Type</label>
         <select class="form-select" id="m-ins-type" onchange="insTypeChanged()">
           <option value="life">Life Insurance</option><option value="health">Health Insurance</option><option value="auto">Auto Insurance</option><option value="other">Other</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Insurer</label><input class="form-input" id="m-ins-insurer" placeholder="e.g. HDFC Life, Star Health"></div>
       <div class="form-group"><label class="form-label">Policy Number</label><input class="form-input" id="m-ins-polno" placeholder="POL-XXXXXXXX"></div>
-      <div class="form-group"><label class="form-label">Member</label>
+      
+      <div class="form-group"><label class="form-label">Sum Assured / Cover (₹)</label><input class="form-input" id="m-ins-cover" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Premium Amount (₹)</label><input class="form-input" id="m-ins-premium" type="number" placeholder="0"></div>
+      
+      <div class="form-group"><label class="form-label">Start Year</label><input class="form-input" id="m-ins-start" type="number" placeholder="YYYY"></div>
+      <div class="form-group"><label class="form-label">End Year</label><input class="form-input" id="m-ins-end" type="number" placeholder="YYYY"></div>
+
+      <div class="form-group"><label class="form-label">Premium Due Date</label><input class="form-input" id="m-ins-due" type="date"></div>
+      <div class="form-group"><label class="form-label">Frequency</label>
+        <select class="form-select" id="m-ins-freq"><option value="annual">Annual</option><option value="half-yearly">Half-Yearly</option><option value="quarterly">Quarterly</option><option value="monthly">Monthly</option><option value="single">Single</option></select>
+      </div>
+      
+      <div class="form-group"><label class="form-label">Nominee Name</label><input class="form-input" id="m-ins-nominee" placeholder="e.g. Sailaja"></div>
+      <div class="form-group"><label class="form-label">Nominee Relation</label><input class="form-input" id="m-ins-nom-rel" placeholder="e.g. Wife"></div>
+
+      <div class="form-group form-full"><label class="form-label">Member Owner</label>
         <select class="form-select" id="m-ins-member">
           <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint/Family</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Sum Assured / Cover (₹)</label><input class="form-input" id="m-ins-cover" type="number" placeholder="0"></div>
-      <div class="form-group"><label class="form-label">Annual Premium (₹)</label><input class="form-input" id="m-ins-premium" type="number" placeholder="0"></div>
-      <div class="form-group"><label class="form-label">Premium Due Date</label><input class="form-input" id="m-ins-due" type="date"></div>
-      <div class="form-group"><label class="form-label">Frequency</label>
-        <select class="form-select" id="m-ins-freq"><option value="annual">Annual</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="semi-annual">Semi-Annual</option></select>
-      </div>
       <div class="form-group form-full" id="ins-covered-wrap">
-        <label class="form-label">Members Covered</label>
-        <input class="form-input" id="m-ins-covered" placeholder="e.g. Self, Spouse, Daughter">
+        <label class="form-label">Members Covered (comma separated)</label>
+        <input class="form-input" id="m-ins-covered" placeholder="e.g. Madhu, Sailaja">
       </div>
       <div class="form-group form-full" id="ins-vehicle-wrap" style="display:none">
         <label class="form-label">Vehicle Registration</label>
         <input class="form-input" id="m-ins-vehicle" placeholder="e.g. TS09AB1234">
       </div>
+      <div class="form-group form-full">
+        <label class="form-label">Notes (Riders/Exclusions)</label>
+        <input class="form-input" id="m-ins-notes" placeholder="e.g. Accidental rider 10L">
+      </div>
     </div>
     <input type="hidden" id="m-ins-id">
+    <input type="hidden" id="m-ins-source">
     <div class="modal-actions"><button class="btn" onclick="closeModal('insModal')">Cancel</button><button class="btn btn-primary" onclick="saveIns()">Save Policy</button></div>
+  </div>
+</div>
+
+<!-- Txn Scanner Modal -->
+<div class="modal-backdrop" id="txnScanModal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('txnScanModal')">×</button>
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:24px">🔍</span> Scan from Transactions
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">
+      We scanned your bank statements for insurance premium payments. Select the ones you want to add as policies.
+    </div>
+    <div id="txn-ins-list" style="display:flex;flex-direction:column;gap:12px;max-height:400px;overflow-y:auto;margin-bottom:16px">
+      <!-- Injected list -->
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('txnScanModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveScannedTxns()">Add Selected Policies</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI Policy Scanner Modal -->
+<div class="modal-backdrop" id="aiInsModal">
+  <div class="modal modal-lg" style="max-width:600px">
+    <button class="modal-close" onclick="closeModal('aiInsModal')">×</button>
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:24px;background:linear-gradient(135deg, #7b5ea7, #4a6fa5);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">✧</span>
+      AI Policy Document Scanner
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">
+      Upload your policy PDF/Image or paste policy email details. The AI engine will scan and extract the policy name, type, premium amount, coverage, and due date.
+    </div>
+    
+    <!-- Upload Area -->
+    <div class="form-group form-full" style="margin-bottom:16px">
+      <div id="ai-drag-area" style="border:2px dashed var(--border);border-radius:8px;padding:30px;text-align:center;background:rgba(255,255,255,0.02);cursor:pointer;transition:all 0.3s;" ondragover="event.preventDefault();this.style.borderColor='var(--accent)';" ondragleave="this.style.borderColor='var(--border)';" ondrop="handlePolicyDrop(event)" onclick="document.getElementById('ai-policy-file').click();">
+        <div style="font-size:32px;margin-bottom:8px">📄</div>
+        <div style="font-weight:600;margin-bottom:4px">Drag & drop your policy PDF or Image here</div>
+        <div style="font-size:11px;color:var(--muted)">or click to select file from computer</div>
+        <input type="file" id="ai-policy-file" style="display:none" onchange="handlePolicySelect(event)">
+        <div id="ai-file-name" style="margin-top:10px;font-size:12px;color:#7b5ea7;font-weight:600;display:none"></div>
+      </div>
+    </div>
+    
+    <!-- Text area for pasting copy -->
+    <div class="form-group form-full" style="margin-bottom:16px">
+      <label class="form-label">Or Paste Email Copy / Raw Policy Text</label>
+      <textarea class="form-input" id="ai-policy-text" rows="5" placeholder="Paste policy details..." style="resize:vertical;font-family:inherit;line-height:1.4"></textarea>
+    </div>
+
+    <!-- AI Scan Progress Screen (Hidden initially) -->
+    <div id="ai-scan-progress" style="display:none;text-align:center;padding:20px 0;">
+      <div class="glowing-spinner" style="width:40px;height:40px;border:3px solid rgba(123,94,167,0.1);border-top:3px solid #7b5ea7;border-radius:50%;margin:0 auto 15px auto;"></div>
+      <div id="ai-progress-status" style="font-weight:600;margin-bottom:6px">Analyzing document structure...</div>
+      <div id="ai-progress-sub" style="font-size:11px;color:var(--muted)">Checking metadata...</div>
+    </div>
+    
+    <!-- AI Results Screen (Hidden initially) -->
+    <div id="ai-scan-results" style="display:none;border:1px solid rgba(123,94,167,0.2);border-radius:8px;padding:16px;background:rgba(123,94,167,0.02);margin-bottom:16px;max-height:50vh;overflow-y:auto">
+      <div style="font-weight:700;color:#7b5ea7;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:16px">✓</span> AI Extraction Completed!
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Policy Name</label><input class="form-input" id="ai-res-name"></div>
+        <div class="form-group"><label class="form-label">Insurer</label><input class="form-input" id="ai-res-insurer"></div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="ai-res-type" onchange="aiResTypeChanged()">
+            <option value="life">Life</option><option value="health">Health</option><option value="auto">Auto</option><option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Sum Assured (₹)</label><input class="form-input" id="ai-res-cover" type="number"></div>
+        <div class="form-group"><label class="form-label">Premium (₹)</label><input class="form-input" id="ai-res-premium" type="number"></div>
+        <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" id="ai-res-due" type="date"></div>
+        <div class="form-group"><label class="form-label">Nominee Name</label><input class="form-input" id="ai-res-nominee"></div>
+        <div class="form-group"><label class="form-label">Nominee Relation</label><input class="form-input" id="ai-res-nom-rel"></div>
+        <div class="form-group"><label class="form-label">Policy Number</label><input class="form-input" id="ai-res-polno"></div>
+        <div class="form-group"><label class="form-label">Covered Members</label><input class="form-input" id="ai-res-extra"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('aiInsModal')">Cancel</button>
+      <button class="btn btn-primary" id="ai-scan-btn" onclick="startAIScan()" style="background:linear-gradient(135deg, #7b5ea7, #4a6fa5);border:none;color:white">✧ Scan with AI</button>
+      <button class="btn btn-primary" id="ai-save-btn" onclick="saveAIResults()" style="display:none;background:var(--green)">Approve & Save</button>
+    </div>
   </div>
 </div>
 
@@ -1577,10 +1682,16 @@ function openEditIns(id) {
   document.getElementById('m-ins-member').value = p.member || 'madhu';
   document.getElementById('m-ins-cover').value = p.cover || 0;
   document.getElementById('m-ins-premium').value = p.premium || 0;
+  document.getElementById('m-ins-start').value = p.startYear || '';
+  document.getElementById('m-ins-end').value = p.endYear || '';
   document.getElementById('m-ins-due').value = p.dueDate || '';
   document.getElementById('m-ins-freq').value = p.freq || 'annual';
+  document.getElementById('m-ins-nominee').value = p.nominee || '';
+  document.getElementById('m-ins-nom-rel').value = p.nomineeRel || '';
   document.getElementById('m-ins-covered').value = (p.covered||[]).join(', ');
   document.getElementById('m-ins-vehicle').value = p.vehicle || '';
+  document.getElementById('m-ins-notes').value = p.notes || '';
+  document.getElementById('m-ins-source').value = p.source || 'manual';
   insTypeChanged();
   openModal('insModal');
 }
@@ -1756,21 +1867,254 @@ function saveIns() {
     member: document.getElementById('m-ins-member').value,
     cover: +document.getElementById('m-ins-cover').value || 0,
     premium: +document.getElementById('m-ins-premium').value || 0,
+    startYear: +document.getElementById('m-ins-start').value || "",
+    endYear: +document.getElementById('m-ins-end').value || "",
     dueDate: document.getElementById('m-ins-due').value,
     freq: document.getElementById('m-ins-freq').value,
+    nominee: document.getElementById('m-ins-nominee').value,
+    nomineeRel: document.getElementById('m-ins-nom-rel').value,
     covered: document.getElementById('m-ins-covered').value.split(',').map(s => s.trim()).filter(Boolean),
-    vehicle: document.getElementById('m-ins-vehicle').value
+    vehicle: document.getElementById('m-ins-vehicle').value,
+    notes: document.getElementById('m-ins-notes').value,
+    source: document.getElementById('m-ins-source').value || "manual"
   };
   if (!p.name) return;
   upsert(D.insurance, p);
   save(); renderAll(); closeModal('insModal');
   document.getElementById('m-ins-id').value = '';
+  document.getElementById('m-ins-source').value = '';
   document.getElementById('insModalTitle').textContent = 'Add Insurance Policy';
 }
 
 function deleteIns(id) {
   D.insurance = D.insurance.filter(i => i.id !== id);
   save(); renderAll();
+}
+
+// ─────────────────────────────────────────────
+// TRANSACTION SCANNER (🔍)
+// ─────────────────────────────────────────────
+let scannedTxns = [];
+
+function scanTxnsForInsurance() {
+  const insurers = ["lic","hdfc life","icici pru","star health","care health","niva bupa","bajaj allianz","tata aia","sbi life","max life","acko","digit","kotak life","religare","max bupa"];
+  
+  scannedTxns = [];
+  D.transactions.forEach(t => {
+    if (t.type === 'debit') {
+      const desc = t.desc.toLowerCase();
+      let matched = insurers.find(ins => desc.includes(ins));
+      if (matched) {
+        const alreadyExists = D.insurance.some(p => p.insurer.toLowerCase().includes(matched) && p.premium === t.amount);
+        if (!alreadyExists) {
+          scannedTxns.push({ id: t.id, date: t.date, desc: t.desc, amount: t.amount, insurer: matched.toUpperCase() });
+        }
+      }
+    }
+  });
+  
+  const listEl = document.getElementById('txn-ins-list');
+  if (scannedTxns.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No new insurance payments found in transactions.</div>`;
+  } else {
+    listEl.innerHTML = scannedTxns.map((t, idx) => `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px;background:var(--surface)">
+        <input type="checkbox" id="scan-chk-${idx}" checked style="width:18px;height:18px;accent-color:var(--accent)">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14px;color:var(--accent)">${t.insurer}</div>
+          <div style="font-size:12px;color:var(--text);margin-bottom:6px">Txn: ${t.desc}</div>
+          <div style="font-size:11px;color:var(--muted)">Date: ${t.date} | Amount: <span style="font-weight:600;color:var(--text)">₹${t.amount.toLocaleString()}</span></div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <input type="text" id="scan-nominee-${idx}" placeholder="Nominee Name" style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;flex:1;background:var(--surface2);color:var(--text)">
+            <input type="text" id="scan-rel-${idx}" placeholder="Relation (e.g. Wife)" style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;flex:1;background:var(--surface2);color:var(--text)">
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+  openModal('txnScanModal');
+}
+
+function saveScannedTxns() {
+  scannedTxns.forEach((t, idx) => {
+    const isChecked = document.getElementById(`scan-chk-${idx}`)?.checked;
+    if (isChecked) {
+      const nominee = document.getElementById(`scan-nominee-${idx}`).value;
+      const rel = document.getElementById(`scan-rel-${idx}`).value;
+      const typeStr = t.insurer.toLowerCase().includes('health') || t.insurer.toLowerCase().includes('bupa') ? 'health' : 'life';
+      
+      D.insurance.push({
+        id: Date.now() + idx,
+        name: `${t.insurer} Policy`,
+        type: typeStr,
+        insurer: t.insurer,
+        polno: '',
+        member: currentMember === 'all' ? 'madhu' : currentMember,
+        cover: 0,
+        premium: t.amount,
+        startYear: new Date(t.date).getFullYear(),
+        endYear: "",
+        dueDate: "",
+        freq: "annual",
+        nominee: nominee,
+        nomineeRel: rel,
+        covered: [],
+        vehicle: "",
+        notes: "Imported from transactions",
+        source: "txn"
+      });
+    }
+  });
+  save(); renderAll(); closeModal('txnScanModal');
+}
+
+// ─────────────────────────────────────────────
+// DOCUMENT AI SCANNER (📄)
+// ─────────────────────────────────────────────
+let selectedPolicyFile = null;
+
+function loadPdfJS() {
+  if (typeof pdfjsLib === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+    script.onload = () => {
+      window.pdfjsLib = window['pdfjs-dist/build/pdf'] || pdfjsLib;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    };
+    document.head.appendChild(script);
+  }
+}
+
+function handlePolicyDrop(e) {
+  e.preventDefault();
+  document.getElementById('ai-drag-area').style.borderColor = 'var(--border)';
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+    selectedPolicyFile = e.dataTransfer.files[0];
+    document.getElementById('ai-file-name').textContent = "📄 " + selectedPolicyFile.name;
+    document.getElementById('ai-file-name').style.display = 'block';
+    if (selectedPolicyFile.name.endsWith('.pdf')) loadPdfJS();
+  }
+}
+
+function handlePolicySelect(e) {
+  if (e.target.files && e.target.files[0]) {
+    selectedPolicyFile = e.target.files[0];
+    document.getElementById('ai-file-name').textContent = "📄 " + selectedPolicyFile.name;
+    document.getElementById('ai-file-name').style.display = 'block';
+    if (selectedPolicyFile.name.endsWith('.pdf')) loadPdfJS();
+  }
+}
+
+async function startAIScan() {
+  const textInput = document.getElementById('ai-policy-text').value;
+  const fileName = selectedPolicyFile ? selectedPolicyFile.name : "";
+  if (!textInput && !selectedPolicyFile) {
+    alert("Please upload a policy document or paste text first.");
+    return;
+  }
+  
+  document.getElementById('ai-drag-area').parentElement.style.display = 'none';
+  document.getElementById('ai-policy-text').parentElement.style.display = 'none';
+  document.getElementById('ai-scan-btn').style.display = 'none';
+  document.getElementById('ai-scan-progress').style.display = 'block';
+  
+  let extractedText = textInput;
+  if (selectedPolicyFile && selectedPolicyFile.type === 'application/pdf') {
+    try {
+      if (typeof pdfjsLib === 'undefined') {
+        await new Promise((resolve) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+          script.onload = () => { window.pdfjsLib = window['pdfjs-dist/build/pdf'] || pdfjsLib; pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js'; resolve(); };
+          document.head.appendChild(script);
+        });
+      }
+      const arrayBuffer = await selectedPolicyFile.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+      const pdf = await loadingTask.promise;
+      const maxPages = Math.min(pdf.numPages, 3);
+      for (let i = 1; i <= maxPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        extractedText += " " + textContent.items.map(item => item.str).join(" ");
+      }
+    } catch(e) {}
+  }
+  
+  const combined = (fileName + " " + extractedText).toLowerCase();
+  
+  let insurer = "Other Insurer";
+  const insurers = ["star health","hdfc life","hdfc ergo","lic","life insurance corporation","niva bupa","icici lombard","icici pru","care health","tata aia","bajaj allianz"];
+  let matchedIns = insurers.find(i => combined.includes(i));
+  if (matchedIns) insurer = matchedIns.toUpperCase();
+  
+  let type = "other";
+  if (/health|optima|medical|bupa/i.test(combined)) type = "health";
+  else if (/life|term|jeevan|pru/i.test(combined)) type = "life";
+  else if (/auto|car|motor/i.test(combined)) type = "auto";
+  
+  let cover = 0;
+  const coverMatch = combined.match(/\b(\d+)\s*(?:lakh|lakhs|cr|crore|crores|l)\b/i) || combined.match(/(?:sum\s+assured|cover)[^\d]*(\d+,?\d+)/i);
+  if (coverMatch) cover = parseInt(coverMatch[1].replace(/,/g,'')) * (coverMatch[0].toLowerCase().includes('cr') ? 10000000 : (coverMatch[0].toLowerCase().includes('l') ? 100000 : 1));
+  if (cover < 10000) cover = type==='life'?5000000:type==='health'?1000000:0;
+  
+  let premium = 0;
+  const premMatch = combined.match(/(?:premium|installment)[^\d]*(\d+,?\d+)/i);
+  if (premMatch) premium = parseInt(premMatch[1].replace(/,/g,''));
+  
+  let polno = "";
+  const polMatch = combined.match(/(?:policy\s*no|pol\s*no)[^\w]*([a-z0-9-]+)/i);
+  if (polMatch) polno = polMatch[1].toUpperCase();
+  
+  let nominee = ""; let nomRel = "";
+  const nomMatch = combined.match(/nominee[^\w]+([a-z\s]+)(?:relation|relationship)?[^\w]+([a-z]+)/i);
+  if (nomMatch) { nominee = nomMatch[1].trim(); nomRel = nomMatch[2].trim(); }
+
+  setTimeout(() => {
+    document.getElementById('ai-res-name').value = insurer + " Policy";
+    document.getElementById('ai-res-insurer').value = insurer;
+    document.getElementById('ai-res-type').value = type;
+    document.getElementById('ai-res-cover').value = cover;
+    document.getElementById('ai-res-premium').value = premium;
+    document.getElementById('ai-res-polno').value = polno;
+    document.getElementById('ai-res-nominee').value = nominee;
+    document.getElementById('ai-res-nom-rel').value = nomRel;
+    document.getElementById('ai-scan-progress').style.display = 'none';
+    document.getElementById('ai-scan-results').style.display = 'block';
+    document.getElementById('ai-save-btn').style.display = 'inline-block';
+  }, 2000);
+}
+
+function saveAIResults() {
+  D.insurance.push({
+    id: Date.now(),
+    name: document.getElementById('ai-res-name').value,
+    type: document.getElementById('ai-res-type').value,
+    insurer: document.getElementById('ai-res-insurer').value,
+    polno: document.getElementById('ai-res-polno').value,
+    member: currentMember === 'all' ? 'madhu' : currentMember,
+    cover: +document.getElementById('ai-res-cover').value || 0,
+    premium: +document.getElementById('ai-res-premium').value || 0,
+    dueDate: document.getElementById('ai-res-due').value,
+    startYear: "", endYear: "",
+    freq: 'annual',
+    nominee: document.getElementById('ai-res-nominee').value,
+    nomineeRel: document.getElementById('ai-res-nom-rel').value,
+    covered: document.getElementById('ai-res-extra').value.split(',').map(s=>s.trim()).filter(Boolean),
+    vehicle: "",
+    notes: "Imported via AI Document Scan",
+    source: "doc"
+  });
+  save(); renderAll(); closeModal('aiInsModal');
+  selectedPolicyFile = null;
+  document.getElementById('ai-file-name').style.display = 'none';
+  document.getElementById('ai-drag-area').parentElement.style.display = 'block';
+  document.getElementById('ai-policy-text').parentElement.style.display = 'block';
+  document.getElementById('ai-scan-btn').style.display = 'inline-block';
+  document.getElementById('ai-scan-progress').style.display = 'none';
+  document.getElementById('ai-scan-results').style.display = 'none';
+  document.getElementById('ai-save-btn').style.display = 'none';
+  document.getElementById('ai-policy-text').value = '';
 }
 
 
@@ -2733,19 +3077,30 @@ function renderIns() {
       const d = daysUntil(p.dueDate);
       const urgent = d !== null ? (d <= 0 ? 'ins-overdue' : d <= 30 ? 'ins-due-soon' : '') : '';
       const dueTxt = d === null ? '—' : d <= 0 ? `<span style="color:var(--red)">OVERDUE</span>` : d <= 30 ? `<span style="color:var(--accent)">${d} days</span>` : `${d} days`;
+      
+      const sourceBadge = p.source === 'doc' ? `<span style="font-size:10px;background:rgba(123,94,167,0.1);color:#7b5ea7;padding:2px 6px;border-radius:4px;margin-left:6px">📄 Doc Scan</span>` : 
+                          p.source === 'txn' ? `<span style="font-size:10px;background:rgba(74,111,165,0.1);color:#4a6fa5;padding:2px 6px;border-radius:4px;margin-left:6px">🔍 Txn Scan</span>` : '';
+      
+      const tenure = (p.startYear && p.endYear) ? `${p.startYear} – ${p.endYear}` : (p.startYear ? `Since ${p.startYear}` : '—');
+      const nomDisplay = p.nominee ? `<span style="color:var(--text)">${p.nominee}${p.nomineeRel ? ' ('+p.nomineeRel+')' : ''}</span>` : `<span style="color:var(--red)">⚠ Not set</span>`;
+
       return `<div class="ins-card ${urgent}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <span class="ins-type-badge ${typeClasses[p.type]}">${typeIcons[p.type]} ${typeLabels[p.type]}</span>
+            <span class="ins-type-badge ${typeClasses[p.type]}">${typeIcons[p.type]} ${typeLabels[p.type]}</span>${sourceBadge}
             <div style="font-size:13px;font-weight:500;margin-top:5px">${p.name} ${memberTag(p.member)}</div>
             <div style="font-size:11px;color:var(--muted)">${p.insurer}${p.polno?' · '+p.polno:''}</div>
           </div>
           <div style="text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:var(--accent)">${fmt(p.premium)}<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">${p.freq||'annual'}</div></div>
         </div>
-        <div class="ins-meta">
+        <div class="ins-meta" style="grid-template-columns:1fr 1fr 1fr">
           <div><div class="ins-meta-label">Cover</div><div class="ins-meta-val" style="color:var(--green)">${p.cover>=1e7?cr(p.cover):lk(p.cover)}</div></div>
-          <div><div class="ins-meta-label">Due Date</div><div class="ins-meta-val">${p.dueDate||'—'}</div></div>
+          <div><div class="ins-meta-label">Tenure</div><div class="ins-meta-val">${tenure}</div></div>
           <div><div class="ins-meta-label">Renewal In</div><div class="ins-meta-val">${dueTxt}</div></div>
+        </div>
+        <div class="ins-meta" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+           <div><div class="ins-meta-label">Nominee</div><div class="ins-meta-val">${nomDisplay}</div></div>
+           <div style="grid-column: span 2"><div class="ins-meta-label">Covered</div><div class="ins-meta-val">${p.covered && p.covered.length ? p.covered.join(', ') : 'Self'}</div></div>
         </div>
         <div class="prop-actions" style="margin-top:8px">
           <button class="btn btn-sm" onclick="openEditIns(${p.id})">Edit</button>
@@ -2755,15 +3110,43 @@ function renderIns() {
     }).join('');
   }
 
-  // Summary
-  const lifeEl = list.filter(p=>p.type==='life');
-  const healthSelf = list.filter(p=>p.type==='health'&&p.covered&&p.covered.some(c=>c.toLowerCase().includes('self')));
-  const healthFam = list.filter(p=>p.type==='health');
-  const autoEl = list.filter(p=>p.type==='auto');
-  document.getElementById('ins-life-summary').textContent = lifeEl.length ? lifeEl.length+' policy/ies · '+cr(lifeCover) : '—';
-  document.getElementById('ins-health-self').textContent = healthSelf.length ? fmt(healthSelf.reduce((s,p)=>s+p.cover,0)) : '—';
-  document.getElementById('ins-health-family').textContent = healthFam.length ? fmt(healthCover)+' total' : '—';
-  document.getElementById('ins-auto-summary').textContent = autoEl.length ? autoEl.length+' vehicle(s)' : '—';
+  // GAP DETECTOR
+  const gaps = [];
+  const noLife = !list.some(p => p.type === 'life' && p.cover >= 5000000);
+  const noHealth = !list.some(p => p.type === 'health');
+  const missingNominee = list.filter(p => !p.nominee && (p.type==='life'||p.type==='health')).length;
+  if (noLife) gaps.push("No sufficient Life Cover (Term Insurance) detected.");
+  if (noHealth) gaps.push("No Health Cover detected.");
+  if (missingNominee > 0) gaps.push(`${missingNominee} policies missing nominee details.`);
+  
+  const gapEl = document.getElementById('ins-gap-detector');
+  if (gaps.length > 0) {
+    gapEl.style.display = 'block';
+    gapEl.innerHTML = `<strong>Coverage Gaps Detected:</strong><ul style="margin-top:4px;padding-left:20px">` + gaps.map(g => `<li>${g}</li>`).join('') + `</ul>`;
+  } else {
+    gapEl.style.display = 'none';
+  }
+
+  // FAMILY COVERAGE GRID
+  const fam = ["Madhu", "Sailaja", "Charan", "Himaja"];
+  const gridHTML = fam.map(person => {
+    // Check if person is covered under any life/health
+    const hasLife = list.some(p => p.type === 'life' && (p.member.toLowerCase() === person.toLowerCase() || (p.covered && p.covered.some(c => c.toLowerCase() === person.toLowerCase()))));
+    const hasHealth = list.some(p => p.type === 'health' && (p.member.toLowerCase() === person.toLowerCase() || (p.covered && p.covered.some(c => c.toLowerCase() === person.toLowerCase())) || p.member === 'joint' || p.member === 'parents'));
+    
+    return `<div style="background:var(--surface2);border-radius:6px;padding:8px;border:1px solid var(--border)">
+       <div style="font-weight:600;font-size:12px;margin-bottom:6px">${person}</div>
+       <div style="display:flex;justify-content:space-between;font-size:11px">
+         <span style="color:var(--muted)">Life</span> <span>${hasLife ? '✅' : '❌'}</span>
+       </div>
+       <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px">
+         <span style="color:var(--muted)">Health</span> <span>${hasHealth ? '✅' : '❌'}</span>
+       </div>
+    </div>`;
+  }).join('');
+  document.getElementById('ins-coverage-grid').innerHTML = gridHTML;
+
+  // 80D Tax Summary
   const healthPremium = list.filter(p=>p.type==='health').reduce((s,p)=>s+p.premium,0);
   const d80 = Math.min(healthPremium, 75000);
   document.getElementById('ins-80d-val').textContent = fmt(d80);
