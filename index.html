@@ -2971,7 +2971,7 @@ const BANK_CONFIGS = {
       if (!date) return null;
       const debit = cleanAmt(row[5+o]), credit = cleanAmt(row[6+o]);
       if (debit===0 && credit===0) return null;
-      return {date, desc:desc.toString().trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(desc.toString())};
+      return {date, desc:desc.toString().trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(desc.toString(), debit||credit)};
     }
   },
   'icici-cc': {
@@ -2985,7 +2985,7 @@ const BANK_CONFIGS = {
       const amt = cleanAmt(row[2]||row[3]);
       if (amt===0) return null;
       const isCredit = (row[2]||'').trim()===''&&cleanAmt(row[3])>0;
-      return {date, desc:row[1].trim(), amount:Math.abs(amt), type:isCredit?'credit':'debit', cat:autoCategory(row[1])};
+      return {date, desc:row[1].trim(), amount:Math.abs(amt), type:isCredit?'credit':'debit', cat:autoCategory(row[1], Math.abs(amt))};
     }
   },
   'sc': {
@@ -2998,7 +2998,7 @@ const BANK_CONFIGS = {
       if (!date) return null;
       const credit = cleanAmt(row[3]), debit = cleanAmt(row[4]);
       if (debit===0&&credit===0) return null;
-      return {date, desc:row[1].trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(row[1])};
+      return {date, desc:row[1].trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(row[1], debit||credit)};
     }
   },
   'amex': {
@@ -3011,7 +3011,7 @@ const BANK_CONFIGS = {
       if (!date) return null;
       const rawAmt = cleanAmtSigned(row[2]);
       if (rawAmt===0) return null;
-      return {date, desc:row[1].trim(), amount:Math.abs(rawAmt), type:rawAmt>0?'debit':'credit', cat:autoCategory(row[1])};
+      return {date, desc:row[1].trim(), amount:Math.abs(rawAmt), type:rawAmt>0?'debit':'credit', cat:autoCategory(row[1], Math.abs(rawAmt))};
     }
   }
 };
@@ -3057,9 +3057,10 @@ function cleanAmtSigned(s) {
   return isNaN(n)?0:n;
 }
 
-function autoCategory(desc) {
+function autoCategory(desc, amount) {
   if (!desc) return 'Other';
   const d = desc.toLowerCase();
+  if (amount === 23790) return 'EMI';
   if (/swiggy|zomato|dominos|food|restaurant|cafe|biryani|pizza/i.test(d)) return 'Food & Dining';
   if (/uber|ola|rapido|redbus|irctc|flight|airways|airline|train|makemytrip/i.test(d)) return 'Travel';
   if (/amazon|flipkart|myntra|meesho|nykaa|blinkit|zepto|shopping/i.test(d)) return 'Shopping';
@@ -3199,14 +3200,15 @@ function confirmImport() {
   });
 
   Object.values(uniqueNewEmis).forEach(r => {
-    const baseName = r.baseName;
+    const isAutoLoan = (r.amount === 23790);
+    const baseName = isAutoLoan ? 'Auto Loan' : r.baseName;
     const match = D.loans.find(l => Math.abs(l.emi - r.amount) < 10 || l.name.toLowerCase() === baseName.toLowerCase());
     if (!match) {
       D.loans.push({
         id: Date.now() + Math.random(),
-        type: 'other',
+        type: isAutoLoan ? 'car' : 'other',
         name: baseName,
-        lender: 'Auto-detected from bank',
+        lender: isAutoLoan ? 'Standard Chartered' : 'Auto-detected from bank',
         member: currentMember === 'all' ? 'madhu' : currentMember,
         principal: r.amount * 24, // Stub data (2 years)
         outstanding: r.amount * 24,
