@@ -1925,7 +1925,8 @@ function syncLoansFromTxns() {
   Object.values(uniqueNewEmis).forEach(r => {
     const isAutoLoan = (r.amount === 23790);
     const baseName = isAutoLoan ? 'Auto Loan' : r.baseName;
-    const match = D.loans.find(l => Math.abs(l.emi - r.amount) < 10 || l.name.toLowerCase() === baseName.toLowerCase());
+    // Match by BOTH amount and name to avoid aggressively merging distinct loans
+    const match = D.loans.find(l => Math.abs(l.emi - r.amount) < 10 && (l.name.toLowerCase().includes(baseName.toLowerCase()) || baseName.toLowerCase().includes(l.name.toLowerCase())));
     if (!match) {
       D.loans.push({
         id: Date.now() + Math.random(),
@@ -2086,8 +2087,8 @@ function renderTxnIntel() {
   // Create a unified list of EMIs
   const unifiedEmis = [];
   D.loans.forEach(l => {
-    // find latest payment for this loan from txns if any
-    const latestTxn = txns.filter(t => Math.abs(t.amount - l.emi) < 10 || t.desc.toLowerCase().includes(l.name.toLowerCase()))
+    // find latest payment for this exact loan (match by amount AND name)
+    const latestTxn = txns.filter(t => Math.abs(t.amount - l.emi) < 10 && t.desc.toLowerCase().includes(l.name.toLowerCase()))
                           .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
     unifiedEmis.push({
       name: l.name,
