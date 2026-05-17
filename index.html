@@ -930,10 +930,17 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
     <!-- ══════════ TRANSACTIONS ══════════ -->
     <div class="view" id="view-transactions">
       <div class="panel">
-        <div class="panel-header"><span class="panel-title">All Transactions</span><button class="panel-action" onclick="openModal('txnModal')">+ Add</button></div>
+        <div class="panel-header">
+          <span class="panel-title">All Transactions</span>
+          <div style="display:flex;gap:7px;align-items:center">
+            <button class="panel-action" onclick="openModal('txnModal')">+ Add</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteAllTxns()" id="del-all-txns-btn" style="font-size:11px;padding:4px 10px">&#x1F5D1; Delete All</button>
+          </div>
+        </div>
         <div class="panel-body">
+          <!-- Filter Row 1 -->
           <div class="search-bar">
-            <input class="search-input" id="txn-search" placeholder="🔍 Search description..." oninput="renderTxns()">
+            <input class="search-input" id="txn-search" placeholder="&#x1F50D; Search description..." oninput="renderTxns()">
             <select class="filter-select" id="txn-filter-cat" onchange="renderTxns()">
               <option value="">All Categories</option>
               <option>Food &amp; Dining</option><option>Travel</option><option>Shopping</option>
@@ -953,7 +960,15 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
               <option value="himaja">Himaja</option>
             </select>
           </div>
-          <div id="txn-list"><div class="empty-state"><div class="empty-icon">≡</div>No transactions</div></div>
+          <!-- Filter Row 2: Date Range -->
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <label style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">From</label>
+            <input type="date" class="search-input" id="txn-date-from" style="flex:0 0 140px" onchange="renderTxns()">
+            <label style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">To</label>
+            <input type="date" class="search-input" id="txn-date-to" style="flex:0 0 140px" onchange="renderTxns()">
+            <button class="btn btn-sm" onclick="resetTxnFilters()" style="font-size:11px;padding:5px 12px;white-space:nowrap">&#x21BA; Reset Filters</button>
+          </div>
+          <div id="txn-list"><div class="empty-state"><div class="empty-icon">&#8801;</div>No transactions</div></div>
           <div id="txn-count" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:10px"></div>
         </div>
       </div>
@@ -2673,22 +2688,29 @@ function renderTax() {
 // TRANSACTIONS
 // ─────────────────────────────────────────────
 function renderTxns() {
-  const search = (document.getElementById('txn-search')||{}).value||'';
-  const catF   = (document.getElementById('txn-filter-cat')||{}).value||'';
-  const typeF  = (document.getElementById('txn-filter-type')||{}).value||'';
-  const memF   = (document.getElementById('txn-filter-member')||{}).value||'';
+  const search  = (document.getElementById('txn-search')||{}).value||'';
+  const catF    = (document.getElementById('txn-filter-cat')||{}).value||'';
+  const typeF   = (document.getElementById('txn-filter-type')||{}).value||'';
+  const memF    = (document.getElementById('txn-filter-member')||{}).value||'';
+  const dateFrom = (document.getElementById('txn-date-from')||{}).value||'';
+  const dateTo   = (document.getElementById('txn-date-to')||{}).value||'';
   let list = filterByMember(D.transactions);
-  if (search) list = list.filter(t => (t.desc||'').toLowerCase().includes(search.toLowerCase()));
-  if (catF)  list = list.filter(t => t.cat === catF);
-  if (typeF) list = list.filter(t => t.type === typeF);
-  if (memF)  list = list.filter(t => t.member === memF);
+  if (search)   list = list.filter(t => (t.desc||'').toLowerCase().includes(search.toLowerCase()));
+  if (catF)     list = list.filter(t => t.cat === catF);
+  if (typeF)    list = list.filter(t => t.type === typeF);
+  if (memF)     list = list.filter(t => t.member === memF);
+  if (dateFrom) list = list.filter(t => t.date >= dateFrom);
+  if (dateTo)   list = list.filter(t => t.date <= dateTo);
   const el = document.getElementById('txn-list');
   const countEl = document.getElementById('txn-count');
+  const delBtn = document.getElementById('del-all-txns-btn');
   if (!list.length) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#8801;</div>No transactions match your filters</div>';
     if (countEl) countEl.textContent = '';
+    if (delBtn) delBtn.style.display = 'none';
     return;
   }
+  if (delBtn) delBtn.style.display = '';
   const catColors = {
     'Food & Dining':'#b5813a','Travel':'#4a7c6f','Shopping':'#7b5ea7','Utilities':'#3a7d54',
     'Entertainment':'#c0392b','Healthcare':'#4a6fa5','Education':'#c0692b','Insurance':'#7ab8a0',
@@ -2704,10 +2726,35 @@ function renderTxns() {
           <div class="txn-cat">${t.cat} &middot; ${t.date}</div>
         </div>
       </div>
-      <div class="txn-amount ${t.type}">${t.type==='debit'?'&minus;':'+'}${fmt(t.amount)}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="txn-amount ${t.type}">${t.type==='debit'?'&minus;':'+'}${fmt(t.amount)}</div>
+        <button onclick="deleteTxn(${t.id})" title="Delete" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 4px;line-height:1" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">&#x2715;</button>
+      </div>
     </div>`
   ).join('');
   if (countEl) countEl.textContent = `Showing ${shown.length} of ${list.length} transactions`;
+}
+
+function deleteTxn(id) {
+  D.transactions = D.transactions.filter(t => t.id !== id);
+  save(); renderAll();
+}
+
+function deleteAllTxns() {
+  const count = D.transactions.length;
+  if (!count) return;
+  if (!confirm(`Delete all ${count} transactions? This cannot be undone.`)) return;
+  D.transactions = [];
+  save(); renderAll();
+}
+
+function resetTxnFilters() {
+  const ids = ['txn-search','txn-filter-cat','txn-filter-type','txn-filter-member','txn-date-from','txn-date-to'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderTxns();
 }
 
 function renderWidgets() {
