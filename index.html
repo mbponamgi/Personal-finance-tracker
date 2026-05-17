@@ -1850,6 +1850,20 @@ function deleteIns(id) {
 // ─────────────────────────────────────────────
 let selectedPolicyFile = null;
 
+function loadPdfJS() {
+  if (typeof pdfjsLib === 'undefined') {
+    console.log("Pre-loading PDF.js from CDN...");
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+    script.onload = () => {
+      window.pdfjsLib = window['pdfjs-dist/build/pdf'] || pdfjsLib;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+      console.log("PDF.js loaded successfully!");
+    };
+    document.head.appendChild(script);
+  }
+}
+
 function handlePolicyDrop(e) {
   e.preventDefault();
   document.getElementById('ai-drag-area').style.borderColor = 'var(--border)';
@@ -1857,6 +1871,7 @@ function handlePolicyDrop(e) {
     selectedPolicyFile = e.dataTransfer.files[0];
     document.getElementById('ai-file-name').textContent = "📄 " + selectedPolicyFile.name;
     document.getElementById('ai-file-name').style.display = 'block';
+    if (selectedPolicyFile.name.endsWith('.pdf')) loadPdfJS();
   }
 }
 
@@ -1865,6 +1880,7 @@ function handlePolicySelect(e) {
     selectedPolicyFile = e.target.files[0];
     document.getElementById('ai-file-name').textContent = "📄 " + selectedPolicyFile.name;
     document.getElementById('ai-file-name').style.display = 'block';
+    if (selectedPolicyFile.name.endsWith('.pdf')) loadPdfJS();
   }
 }
 
@@ -1875,6 +1891,39 @@ function aiResTypeChanged() {
     extraInput.placeholder = "e.g. Self, Spouse, Daughter";
   } else if (type === 'auto') {
     extraInput.placeholder = "e.g. TS09AB1234";
+  }
+}
+
+async function extractTextFromPDF(file) {
+  try {
+    if (typeof pdfjsLib === 'undefined') {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+        script.onload = () => {
+          window.pdfjsLib = window['pdfjs-dist/build/pdf'] || pdfjsLib;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+          resolve();
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+    const pdf = await loadingTask.promise;
+    let fullText = "";
+    const maxPages = Math.min(pdf.numPages, 3);
+    for (let i = 1; i <= maxPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(" ");
+      fullText += pageText + "\n";
+    }
+    return fullText;
+  } catch (e) {
+    console.error("PDF extraction failed, using filename heuristics:", e);
+    return "";
   }
 }
 
@@ -1894,29 +1943,32 @@ function extractPolicyDetails(filename, text) {
   else if (/tata aia/i.test(combined)) insurer = "Tata AIA";
   else if (/bajaj allianz/i.test(combined)) insurer = "Bajaj Allianz";
   else {
-    const match = combined.match(/([a-z]+)\s+(life|health|ergo|lombard|allianz)/i);
-    if (match) insurer = match[1].charAt(0).toUpperCase() + match[1].slice(1) + " " + match[2].charAt(0).toUpperCase() + match[2].slice(1);
+    const match = combined.match(/([a-z\s]+)\s+(life|health|ergo|lombard|allianz|pru)/i);
+    if (match) insurer = match[1].charAt(0).toUpperCase() + match[1].slice(1).trim();
     else insurer = "Other Insurer";
   }
 
   // 2. Detect Policy Type
   let type = "other";
-  if (/health|optima|medical|mediclaim/i.test(combined)) type = "health";
-  else if (/life|term|click2protect|jeevan|endowment|aia/i.test(combined)) type = "life";
-  else if (/auto|car|bike|vehicle|motor|insurance/i.test(combined)) type = "auto";
+  if (/health|optima|medical|mediclaim|bupa/i.test(combined)) type = "health";
+  else if (/life|term|click2protect|jeevan|endowment|aia|pru/i.test(combined)) type = "life";
+  else if (/auto|car|bike|vehicle|motor|insurance|secure/i.test(combined)) type = "auto";
   
   // 3. Detect Sum Assured / Coverage
   let cover = 0;
-  const coverMatches = text.match(/(?:sum\s+(?:insured|assured)|cover|coverage|limit|assured)(?:\s+(?:of|is))?\s*(?:rs\.?|inr|₹)?\s*([\d,]+)/i) || 
-                       text.match(/(?:rs\.?|inr|₹)?\s*([\d,]+)\s*(?:lakh|lakhs|cr|crore|crores)/i) ||
-                       combined.match(/(?:sum\s+(?:insured|assured)|cover|coverage)\s*[:=-]?\s*([\d,]+)/i);
+  const coverMatches = combined.match(/(?:sum\s+(?:insured|assured)|cover|coverage|limit|assured)(?:\s+(?:of|is))?\s*(?:rs\.?|inr|₹)?\s*([\d,]+)/i) || 
+                       combined.match(/(?:rs\.?|inr|₹)?\s*([\d,]+)\s*(?:lakh|lakhs|cr|crore|crores)/i) ||
+                       combined.match(/\b(\d+)\s*(?:lakh|lakhs|cr|crore|crores)\b/i) ||
+                       combined.match(/\b(\d+)\s*l\b/i);
+                       
   if (coverMatches) {
     let amtStr = coverMatches[1].replace(/,/g, '');
-    if (coverMatches[0].toLowerCase().includes('lakh')) cover = parseFloat(amtStr) * 100000;
-    else if (coverMatches[0].toLowerCase().includes('crore') || coverMatches[0].toLowerCase().includes('cr')) cover = parseFloat(amtStr) * 10000000;
+    const fullMatch = coverMatches[0].toLowerCase();
+    if (fullMatch.includes('lakh') || fullMatch.endsWith('l')) cover = parseFloat(amtStr) * 100000;
+    else if (fullMatch.includes('crore') || fullMatch.includes('cr')) cover = parseFloat(amtStr) * 10000000;
     else cover = parseFloat(amtStr) || 0;
   } else {
-    const numbers = text.replace(/,/g, '').match(/\b\d{5,8}\b/g);
+    const numbers = combined.replace(/,/g, '').match(/\b\d{5,8}\b/g);
     if (numbers) {
       cover = Math.max(...numbers.map(Number));
     } else {
@@ -1926,14 +1978,15 @@ function extractPolicyDetails(filename, text) {
 
   // 4. Detect Premium
   let premium = 0;
-  const premMatches = text.match(/(?:premium|installment|installment\s+amount|amt\s+due|amount\s+due|to\s+be\s+paid|paying|charges)\s*(?:of|is)?\s*[:=-]?\s*(?:rs\.?|inr|₹)?\s*([\d,]+)/i) ||
+  const premMatches = combined.match(/(?:premium|installment|installment\s+amount|amt\s+due|amount\s+due|to\s+be\s+paid|paying|charges)\s*(?:of|is)?\s*[:=-]?\s*(?:rs\.?|inr|₹)?\s*([\d,]+)/i) ||
                       combined.match(/(?:premium|install)(?:\s+amount)?\s*[:=-]?\s*([\d,]+)/i);
   if (premMatches) {
     premium = parseFloat(premMatches[1].replace(/,/g, '')) || 0;
   } else {
-    const numbers = text.replace(/,/g, '').match(/\b\d{4,5}\b/g);
+    const numbers = combined.replace(/,/g, '').match(/\b\d{4,5}\b/g);
     if (numbers) {
-      premium = parseFloat(numbers[0]) || 0;
+      const filtered = numbers.map(Number).filter(n => n !== cover && n < 100000);
+      premium = filtered.length > 0 ? filtered[0] : 12000;
     } else {
       premium = type === 'life' ? 12000 : type === 'health' ? 15000 : 4000;
     }
@@ -1952,9 +2005,12 @@ function extractPolicyDetails(filename, text) {
 
   // 6. Detect Due Date
   let due = "";
-  const dateMatches = text.match(/(?:due\s+date|expiry|renew|renewal|next\s+payment|due\s+on)\s*(?:is|on)?\s*[:=-]?\s*([a-zA-Z0-9\s,\/-]+)/i);
+  const dateMatches = combined.match(/(?:due\s+date|expiry|renew|renewal|next\s+payment|due\s+on)\s*(?:is|on)?\s*[:=-]?\s*([a-zA-Z0-9\s,\/-]+)/i) ||
+                      combined.match(/\b\d{2}[-\/\.]\d{2}[-\/\.]\d{4}\b/) ||
+                      combined.match(/\b\d{4}[-\/\.]\d{2}[-\/\.]\d{2}\b/);
   if (dateMatches) {
-    const cleanDate = parseDate(dateMatches[1].trim(), 'DD/MM/YYYY') || parseDate(dateMatches[1].trim(), 'DD MMM YYYY') || parseDate(dateMatches[1].trim(), 'YYYY-MM-DD');
+    const rawDateStr = dateMatches[1] || dateMatches[0];
+    const cleanDate = parseDate(rawDateStr.trim(), 'DD/MM/YYYY') || parseDate(rawDateStr.trim(), 'DD MMM YYYY') || parseDate(rawDateStr.trim(), 'YYYY-MM-DD');
     if (cleanDate) due = cleanDate;
   }
   if (!due) {
@@ -1977,21 +2033,21 @@ function extractPolicyDetails(filename, text) {
   // 8. Covered Members or Extra Info
   let extra = "";
   if (type === 'health') {
-    const memMatches = text.match(/(?:members|covers|covered)\s*[:=-]?\s*([a-zA-Z\s,]+)/i);
+    const memMatches = combined.match(/(?:members|covers|covered)\s*[:=-]?\s*([a-zA-Z\s,]+)/i);
     extra = memMatches ? memMatches[1].trim() : "Self, Spouse";
   } else if (type === 'auto') {
-    const vehMatches = text.match(/(?:vehicle|reg|registration)\s*[:=-]?\s*([a-zA-Z0-9\s-]+)/i);
+    const vehMatches = combined.match(/(?:vehicle|reg|registration)\s*[:=-]?\s*([a-zA-Z0-9\s-]+)/i);
     extra = vehMatches ? vehMatches[1].trim().toUpperCase() : "TS09AB1234";
   }
 
   return { name, insurer, type, cover, premium, due, polno, extra };
 }
 
-function startAIScan() {
+async function startAIScan() {
   const textInput = document.getElementById('ai-policy-text').value;
   const fileName = selectedPolicyFile ? selectedPolicyFile.name : "";
   
-  if (!textInput && !fileName) {
+  if (!textInput && !selectedPolicyFile) {
     alert("Please upload a policy document or paste the policy text first.");
     return;
   }
@@ -2001,8 +2057,27 @@ function startAIScan() {
   document.getElementById('ai-scan-btn').style.display = 'none';
   document.getElementById('ai-scan-progress').style.display = 'block';
   
+  document.getElementById('ai-progress-status').textContent = "Reading document...";
+  document.getElementById('ai-progress-sub').textContent = selectedPolicyFile ? `Analyzing ${selectedPolicyFile.name}...` : "Reading pasted text...";
+  
+  let extractedText = textInput;
+  
+  if (selectedPolicyFile) {
+    if (selectedPolicyFile.type === 'application/pdf' || selectedPolicyFile.name.endsWith('.pdf')) {
+      document.getElementById('ai-progress-status').textContent = "Running AI OCR on PDF...";
+      document.getElementById('ai-progress-sub').textContent = "Extracting raw vector document text...";
+      extractedText = await extractTextFromPDF(selectedPolicyFile);
+    } else if (selectedPolicyFile.type.startsWith('text/') || selectedPolicyFile.name.endsWith('.txt') || selectedPolicyFile.name.endsWith('.csv')) {
+      document.getElementById('ai-progress-status').textContent = "Reading text file...";
+      extractedText = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsText(selectedPolicyFile);
+      });
+    }
+  }
+
   const statuses = [
-    { main: "Extracting document structure...", sub: "Scanning PDF/Image text blocks..." },
     { main: "Running OCR & financial pattern matching...", sub: "Identifying premium amounts and coverages..." },
     { main: "Synthesizing AI extraction results...", sub: "Validating due dates and coverage rules..." }
   ];
@@ -2015,7 +2090,7 @@ function startAIScan() {
       step++;
     } else {
       clearInterval(interval);
-      const res = extractPolicyDetails(fileName, textInput);
+      const res = extractPolicyDetails(fileName, extractedText);
       
       document.getElementById('ai-res-name').value = res.name;
       document.getElementById('ai-res-insurer').value = res.insurer;
