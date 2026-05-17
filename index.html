@@ -1907,6 +1907,9 @@ function newTax(inc) {
 // RENDER ALL
 // ─────────────────────────────────────────────
 function syncLoansFromTxns() {
+  console.log("Running syncLoansFromTxns...");
+  console.log("Current D.loans:", D.loans);
+  console.log("Current D.transactions count:", D.transactions.length);
   let changed = false;
   const uniqueNewEmis = {};
   D.transactions.forEach(r => {
@@ -1921,31 +1924,47 @@ function syncLoansFromTxns() {
       uniqueNewEmis[key] = { ...r, baseName: base };
     }
   });
+  console.log("Detected EMIs from transactions:", uniqueNewEmis);
 
   Object.values(uniqueNewEmis).forEach(r => {
-    const isAutoLoan = (r.amount === 23790);
+    const amtNum = Number(r.amount);
+    const isAutoLoan = (!isNaN(amtNum) && Math.abs(amtNum - 23790) < 1);
     const baseName = isAutoLoan ? 'Auto Loan' : r.baseName;
-    // Match by BOTH amount and name to avoid aggressively merging distinct loans
-    const match = D.loans.find(l => Math.abs(l.emi - r.amount) < 10 && (l.name.toLowerCase().includes(baseName.toLowerCase()) || baseName.toLowerCase().includes(l.name.toLowerCase())));
+    console.log(`Checking match for ${baseName} with EMI ${amtNum}`);
+    const match = D.loans.find(l => {
+      const loanEmi = Number(l.emi);
+      const rowAmt = Number(r.amount);
+      const emiMatch = Math.abs(loanEmi - rowAmt) < 10;
+      const nameMatch = l.name.toLowerCase().includes(baseName.toLowerCase()) || 
+                          baseName.toLowerCase().includes(l.name.toLowerCase());
+      console.log(`Comparing with existing loan "${l.name}" (EMI: ${loanEmi}): emiMatch=${emiMatch}, nameMatch=${nameMatch}`);
+      return emiMatch && nameMatch;
+    });
     if (!match) {
+      console.log(`No match found! Auto-populating loan stub for "${baseName}" (${amtNum})`);
       D.loans.push({
         id: Date.now() + Math.random(),
         type: isAutoLoan ? 'car' : 'other',
         name: baseName,
         lender: isAutoLoan ? 'Standard Chartered' : 'Auto-detected from bank',
         member: currentMember === 'all' ? 'madhu' : currentMember,
-        principal: r.amount * 24, // Stub data (2 years)
-        outstanding: r.amount * 24,
-        emi: r.amount,
+        principal: amtNum * 24, // Stub data (2 years)
+        outstanding: amtNum * 24,
+        emi: amtNum,
         rate: 10,
         tenure: 24,
         emiDay: parseInt((r.date||'').split('-')[2], 10) || 1,
         intPaid: 0
       });
       changed = true;
+    } else {
+      console.log(`Match found for "${baseName}"! Skipping auto-population.`);
     }
   });
-  if (changed) save();
+  if (changed) {
+    console.log("D.loans updated, saving to local storage...");
+    save();
+  }
 }
 
 function renderAll() {
@@ -2088,8 +2107,11 @@ function renderTxnIntel() {
   const unifiedEmis = [];
   D.loans.forEach(l => {
     // find latest payment for this exact loan (match by amount AND name)
-    const latestTxn = txns.filter(t => Math.abs(t.amount - l.emi) < 10 && t.desc.toLowerCase().includes(l.name.toLowerCase()))
-                          .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+    const latestTxn = txns.filter(t => {
+      const tAmt = Number(t.amount);
+      const lEmi = Number(l.emi);
+      return Math.abs(tAmt - lEmi) < 10 && t.desc.toLowerCase().includes(l.name.toLowerCase());
+    }).sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
     unifiedEmis.push({
       name: l.name,
       amount: l.emi,
@@ -3063,6 +3085,32 @@ function parseDate(str, fmt) {
   if (!str) return null;
   str = str.trim().replace(/"/g,'');
   try {
+    // Robust parsing for dash/dot/slash formats
+    const cleanStr = str.replace(/[-\.]/g, '/');
+    if (/[a-zA-Z]/.test(cleanStr)) {
+      const dt = new Date(cleanStr);
+      if (!isNaN(dt)) return dt.toISOString().split('T')[0];
+    }
+    const parts = cleanStr.split('/');
+    if (parts.length === 3) {
+      let [d, m, y] = parts.map(Number);
+      if (y < 100) y += 2000;
+      if (fmt === 'DD/MM/YYYY' || fmt === 'DD MMM YYYY') {
+        const dt = new Date(y, m - 1, d);
+        return isNaN(dt) ? null : dt.toISOString().split('T')[0];
+      }
+      if (fmt === 'MM/DD/YYYY') {
+        const dt = new Date(y, d - 1, m);
+        return isNaN(dt) ? null : dt.toISOString().split('T')[0];
+      }
+      if (fmt === 'YYYY-MM-DD') {
+        const dt = new Date(cleanStr);
+        return isNaN(dt) ? null : dt.toISOString().split('T')[0];
+      }
+    }
+  } catch(e) {}
+  // Fallback to basic string splitting if everything else fails
+  try {
     if (fmt==='DD/MM/YYYY') {
       const [d,m,y] = str.split('/');
       if (!d||!m||!y) return null;
@@ -3083,7 +3131,7 @@ function parseDate(str, fmt) {
       const dt = new Date(y,m-1,d);
       return isNaN(dt)?null:dt.toISOString().split('T')[0];
     }
-  } catch(e) {}
+  } catch(ex) {}
   const dt = new Date(str);
   return isNaN(dt)?null:dt.toISOString().split('T')[0];
 }
@@ -3103,7 +3151,8 @@ function cleanAmtSigned(s) {
 function autoCategory(desc, amount) {
   if (!desc) return 'Other';
   const d = desc.toLowerCase();
-  if (amount === 23790) return 'EMI';
+  const amtNum = Number(amount);
+  if (!isNaN(amtNum) && Math.abs(amtNum - 23790) < 1) return 'EMI';
   if (/swiggy|zomato|dominos|food|restaurant|cafe|biryani|pizza/i.test(d)) return 'Food & Dining';
   if (/uber|ola|rapido|redbus|irctc|flight|airways|airline|train|makemytrip/i.test(d)) return 'Travel';
   if (/amazon|flipkart|myntra|meesho|nykaa|blinkit|zepto|shopping/i.test(d)) return 'Shopping';
