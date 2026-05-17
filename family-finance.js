@@ -1535,12 +1535,29 @@ function parseCSV(event) {
   const cfg = BANK_CONFIGS[selectedBank];
   const reader = new FileReader();
   reader.onload = function(e) {
-    const lines = e.target.result.split('\n').filter(l => l.trim());
+    let rows = [];
+    if (typeof XLSX !== 'undefined') {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(firstSheet, {header: 1, raw: false, defval: ''});
+        rows = json.map(r => r.map(c => c ? c.toString().trim() : ''));
+        rows = rows.filter(r => r.length > 0 && r.some(c => c !== ''));
+      } catch (err) {
+        console.error("XLSX parse error", err);
+      }
+    }
+    if (!rows.length) {
+      const text = new TextDecoder().decode(e.target.result);
+      rows = text.split('\n').filter(l => l.trim()).map(parseCSVLine);
+    }
+
     parsedRows = [];
     const previewRows = [];
     const skipped = cfg.skipRows || 1;
-    for (let i = 0; i < lines.length; i++) {
-      const row = parseCSVLine(lines[i]);
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
       if (i < skipped) { previewRows.push({header:true,row}); continue; }
       try {
         const parsed = cfg.parse(row);
@@ -1559,10 +1576,10 @@ function parseCSV(event) {
         `<div class="parse-row"><div class="parse-cell val">${r.row.date}</div><div class="parse-cell val">${r.row.desc}</div><div class="parse-cell val" style="color:var(--accent)">₹${r.row.amount.toLocaleString('en-IN')}</div><div class="parse-cell val" style="color:${r.row.type==='debit'?'var(--red)':'var(--green)'}">${r.row.type}</div><div class="parse-cell val">${r.row.cat}</div></div>`
       ).join('');
     document.getElementById('parse-summary').textContent =
-      `File: ${file.name} · ${lines.length-skipped} rows read · ${parsedRows.length} valid · ${lines.length-skipped-parsedRows.length} skipped`;
+      `File: ${file.name} · ${rows.length-skipped} rows read · ${parsedRows.length} valid · ${rows.length-skipped-parsedRows.length} skipped`;
     event.target.value = '';
   };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
 
 function confirmImport() {

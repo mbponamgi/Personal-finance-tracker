@@ -1,0 +1,4 @@
+S No., Value Date, Transaction Date, Cheque Number, Transaction Remarks, Withdrawal Amount(INR), Deposit Amount(INR), Balance(INR)
+1, 01/05/2026, 01/05/2026, , Zomato, 500.00, , 10500.00
+2, 02/05/2026, 02/05/2026, , Salary NEFT, , 50000.00, 60500.00
+3, 03/05/2026, 03/05/2026, , Netflix, 199.00, , 60301.00
