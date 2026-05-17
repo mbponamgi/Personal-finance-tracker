@@ -3093,16 +3093,18 @@ const BANK_CONFIGS = {
   },
   'icici-cc': {
     label:'ICICI Credit Card', account:'icici-cc',
-    hint:'ICICI CC CSV: Date, Description, Amount',
+    hint:'ICICI CC CSV: Date, Sr.No., Transaction Description, Reward Point, Intl.Amount, Amount(in Rs.), Billing Amount',
     skipRows:1,
     parse(row) {
-      if (!row[1]) return null;
-      const date = parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD');
+      if (!row[2]) return null;
+      const date = parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD') || parseDate(row[0],'DD-MM-YYYY');
       if (!date) return null;
-      const amt = cleanAmt(row[2]||row[3]);
-      if (amt===0) return null;
-      const isCredit = (row[2]||'').trim()===''&&cleanAmt(row[3])>0;
-      return {date, desc:row[1].trim(), amount:Math.abs(amt), type:isCredit?'credit':'debit', cat:autoCategory(row[1], Math.abs(amt))};
+      const amtStr = (row[5] || '').toString().trim();
+      const rawAmt = cleanAmtSigned(amtStr);
+      if (rawAmt === 0) return null;
+      const isCredit = amtStr.toLowerCase().includes('cr') || rawAmt < 0 || /payment|refund|cashback|cr/i.test(row[2]);
+      const amount = Math.abs(rawAmt);
+      return {date, desc:row[2].trim(), amount, type:isCredit?'credit':'debit', cat:autoCategory(row[2], amount)};
     }
   },
   'sc': {
