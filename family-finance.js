@@ -1397,12 +1397,14 @@ const BANK_CONFIGS = {
     hint:'ICICI CSV: S No., Value Date, Transaction Date, Cheque Number, Transaction Remarks, Withdrawal Amount(INR), Deposit Amount(INR), Balance(INR)',
     skipRows:1,
     parse(row) {
-      if (!row[4]) return null;
-      const date = parseDate(row[2],'DD/MM/YYYY') || parseDate(row[2],'YYYY-MM-DD');
+      const o = row[0] === "" ? 1 : 0;
+      const desc = row[4+o];
+      if (!desc) return null;
+      const date = parseDate(row[2+o],'DD/MM/YYYY') || parseDate(row[2+o],'YYYY-MM-DD');
       if (!date) return null;
-      const debit = cleanAmt(row[5]), credit = cleanAmt(row[6]);
+      const debit = cleanAmt(row[5+o]), credit = cleanAmt(row[6+o]);
       if (debit===0 && credit===0) return null;
-      return {date, desc:row[4].trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(row[4])};
+      return {date, desc:desc.trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(desc)};
     }
   },
   'icici-cc': {
