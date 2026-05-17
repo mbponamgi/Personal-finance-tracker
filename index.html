@@ -549,6 +549,22 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
           </div>
         </div>
       </div>
+
+      <!-- TRANSACTION INTELLIGENCE PANEL -->
+      <div class="three-col" style="margin-bottom:0" id="txn-intel-wrap">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">&#x1F4CB; Auto-Detected EMIs</span><button class="panel-action" onclick="go('loans')">Manage loans →</button></div>
+          <div class="panel-body" id="ov-txn-emis"><div class="empty-state"><div class="empty-icon">≈</div>Import transactions to detect EMIs</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">&#x1F4B8; Income &amp; Credits</span><button class="panel-action" onclick="go('transactions')">View all →</button></div>
+          <div class="panel-body" id="ov-txn-income"><div class="empty-state"><div class="empty-icon">↑</div>Import transactions to see income</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">&#x1F4CA; Spend Breakdown (All Time)</span><button class="panel-action" onclick="go('transactions')">View all →</button></div>
+          <div class="panel-body" id="ov-txn-cats"><div class="empty-state"><div class="empty-icon">≋</div>Import transactions to see breakdown</div></div>
+        </div>
+      </div>
     </div>
 
     <!-- ══════════ ACCOUNTS ══════════ -->
@@ -946,7 +962,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
               <option>Food &amp; Dining</option><option>Travel</option><option>Shopping</option>
               <option>Utilities</option><option>Entertainment</option><option>Healthcare</option>
               <option>Education</option><option>Insurance</option><option>Investment</option>
-              <option>Salary</option><option>EMI</option><option>Other</option>
+              <option>Salary</option><option>EMI</option><option>Donation</option><option>Other</option>
             </select>
             <select class="filter-select" id="txn-filter-type" onchange="renderTxns()">
               <option value="">All Types</option>
@@ -1302,7 +1318,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
         <select class="form-select" id="m-txn-type"><option value="debit">Debit / Spend</option><option value="credit">Credit / Income</option></select>
       </div>
       <div class="form-group"><label class="form-label">Category</label>
-        <select class="form-select" id="m-txn-cat"><option>Food &amp; Dining</option><option>Travel</option><option>Shopping</option><option>Utilities</option><option>Entertainment</option><option>Healthcare</option><option>Education</option><option>Insurance</option><option>Investment</option><option>Salary</option><option>EMI</option><option>Other</option></select>
+        <select class="form-select" id="m-txn-cat"><option>Food &amp; Dining</option><option>Travel</option><option>Shopping</option><option>Utilities</option><option>Entertainment</option><option>Healthcare</option><option>Education</option><option>Insurance</option><option>Investment</option><option>Salary</option><option>EMI</option><option>Donation</option><option>Other</option></select>
       </div>
       <div class="form-group"><label class="form-label">Member</label>
         <select class="form-select" id="m-txn-member">
@@ -2014,6 +2030,73 @@ function renderOv() {
   renderNWChart();
   renderAlerts();
   renderMemberNW();
+  renderTxnIntel();
+}
+
+function renderTxnIntel() {
+  const txns = filterByMember(D.transactions);
+  
+  // 1. Auto-Detected EMIs
+  const emiEl = document.getElementById('ov-txn-emis');
+  const emiTxns = txns.filter(t => t.cat === 'EMI' || /emi|loan/i.test(t.desc));
+  const uniqueEmis = {};
+  emiTxns.forEach(t => {
+    // Extract base description to group recurring EMIs
+    let base = (t.desc||'').split('/')[0].trim();
+    if (!base) base = 'EMI Payment';
+    if (!uniqueEmis[base] || new Date(t.date) > new Date(uniqueEmis[base].date)) {
+      uniqueEmis[base] = t;
+    }
+  });
+  const emiList = Object.values(uniqueEmis).sort((a,b) => b.amount - a.amount);
+  if (!emiList.length) {
+    if(emiEl) emiEl.innerHTML = '<div class="empty-state"><div class="empty-icon">≈</div>Import transactions to detect EMIs</div>';
+  } else {
+    if(emiEl) emiEl.innerHTML = emiList.map(t => `
+      <div class="data-row" style="padding:6px 0">
+        <div><div style="font-size:12px;font-weight:500">${t.desc.slice(0, 30)}</div><div style="font-size:10px;color:var(--muted)">Last paid: ${t.date}</div></div>
+        <div class="row-val negative">−${fmt(t.amount)}</div>
+      </div>
+    `).join('');
+  }
+
+  // 2. Income & Credits
+  const incEl = document.getElementById('ov-txn-income');
+  const credits = txns.filter(t => t.type === 'credit');
+  const incGroups = {};
+  credits.forEach(t => {
+    const cat = t.cat === 'Salary' ? 'Salary' : t.cat === 'Investment' ? 'Investment Return' : 'Other Income';
+    incGroups[cat] = (incGroups[cat] || 0) + t.amount;
+  });
+  if (!credits.length) {
+    if(incEl) incEl.innerHTML = '<div class="empty-state"><div class="empty-icon">↑</div>Import transactions to see income</div>';
+  } else {
+    if(incEl) incEl.innerHTML = Object.entries(incGroups).sort((a,b)=>b[1]-a[1]).map(([cat, amt]) => `
+      <div class="data-row" style="padding:6px 0">
+        <div style="font-size:12px;color:var(--text2)">${cat}</div>
+        <div class="row-val positive">+${fmt(amt)}</div>
+      </div>
+    `).join('') + `<div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:right">Total Credits: ${fmt(credits.reduce((s,t)=>s+t.amount,0))}</div>`;
+  }
+
+  // 3. Spend Breakdown (All Time)
+  const catEl = document.getElementById('ov-txn-cats');
+  const debits = txns.filter(t => t.type === 'debit' && t.cat !== 'Investment'); // Exclude investments from spend
+  const catTotals = {};
+  debits.forEach(t => { catTotals[t.cat] = (catTotals[t.cat]||0) + t.amount; });
+  if (!debits.length) {
+    if(catEl) catEl.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>Import transactions to see breakdown</div>';
+  } else {
+    const sorted = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+    const total = debits.reduce((s,t)=>s+t.amount,0);
+    if(catEl) catEl.innerHTML = sorted.slice(0, 5).map(([cat, amt]) => `
+      <div class="spend-row" style="margin-bottom:6px">
+        <div class="spend-label" style="width:100px">${cat}</div>
+        <div class="spend-bar-wrap"><div class="spend-bar-fill" style="width:${(amt/total*100).toFixed(1)}%;background:var(--accent2)"></div></div>
+        <div class="spend-val">${fmt(amt)}</div>
+      </div>
+    `).join('') + `<div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:right">All-time spend: ${fmt(total)}</div>`;
+  }
 }
 
 function renderMemberNW() {
@@ -2982,6 +3065,7 @@ function autoCategory(desc) {
   if (/insurance|lic|hdfc life|bajaj|star health/i.test(d)) return 'Insurance';
   if (/mutual fund|sip|zerodha|groww|upstox|nse|bse|dividend/i.test(d)) return 'Investment';
   if (/emi|loan|home loan|car loan/i.test(d)) return 'EMI';
+  if (/donation|charity|ngo|relief|temple|church|mosque|foundation/i.test(d)) return 'Donation';
   if (/salary|credit|neft cr|upi cr|rtgs cr/i.test(d)) return 'Salary';
   return 'Other';
 }
