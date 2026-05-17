@@ -3176,9 +3176,45 @@ function confirmImport() {
     added++;
   });
   D.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  // Auto-populate EMIs into Loans
+  let addedLoans = 0;
+  const uniqueNewEmis = {};
+  parsedRows.forEach(r => {
+    if (r.cat === 'EMI' || /emi|loan/i.test(r.desc)) {
+      uniqueNewEmis[r.desc.split('/')[0].trim() || 'Loan'] = r;
+    }
+  });
+
+  Object.values(uniqueNewEmis).forEach(r => {
+    const baseName = r.desc.split('/')[0].trim() || 'Auto-Detected Loan';
+    const match = D.loans.find(l => Math.abs(l.emi - r.amount) < 10 || l.name === baseName);
+    if (!match) {
+      D.loans.push({
+        id: Date.now() + Math.random(),
+        type: 'other',
+        name: baseName,
+        lender: 'Auto-detected from bank',
+        member: currentMember === 'all' ? 'madhu' : currentMember,
+        principal: r.amount * 24, // Stub data (2 years)
+        outstanding: r.amount * 24,
+        emi: r.amount,
+        rate: 10,
+        tenure: 24,
+        emiDay: parseInt(r.date.split('-')[2], 10) || 1,
+        intPaid: 0
+      });
+      addedLoans++;
+    }
+  });
+
   save(); renderAll();
+  let msg = `✓ Imported ${added} txns`;
+  if (addedLoans > 0) msg += ` · Auto-added ${addedLoans} new loan(s)`;
+  msg += ` · ${dupes} duplicates skipped`;
+  
   document.getElementById('parse-status-badge').innerHTML =
-    `<span class="parse-status parse-ok">✓ Imported ${added} · ${dupes} duplicates skipped</span>`;
+    `<span class="parse-status parse-ok">${msg}</span>`;
   const btn = document.getElementById('importConfirmBtn');
   btn.textContent = 'Done ✓'; btn.disabled = true;
   parsedRows = [];
