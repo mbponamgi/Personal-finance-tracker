@@ -308,6 +308,34 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
 .spend-bar-fill{height:100%;border-radius:3px;}
 .spend-val{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);width:80px;text-align:right;}
 
+/* ── WIDGET CARDS ── */
+.widget-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+.widget-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;transition:box-shadow .15s;}
+.widget-card:hover{box-shadow:0 2px 16px rgba(0,0,0,.07);}
+.widget-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;}
+.wc-gold::after{background:linear-gradient(90deg,var(--accent),transparent);}
+.wc-teal::after{background:linear-gradient(90deg,var(--accent2),transparent);}
+.wc-purple::after{background:linear-gradient(90deg,var(--accent3),transparent);}
+.wc-green::after{background:linear-gradient(90deg,var(--green),transparent);}
+.wc-red::after{background:linear-gradient(90deg,var(--red),transparent);}
+.wc-blue::after{background:linear-gradient(90deg,#4a6fa5,transparent);}
+.wc-orange::after{background:linear-gradient(90deg,var(--orange),transparent);}
+.widget-label{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;}
+.widget-value{font-family:'DM Mono',monospace;font-size:19px;font-weight:500;letter-spacing:-.02em;color:var(--text);}
+.widget-sub{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;}
+.widget-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace;font-size:9px;margin-top:6px;}
+.wchip-up{background:var(--green-light);color:var(--green);}
+.wchip-down{background:var(--red-light);color:var(--red);}
+.wchip-warn{background:var(--accent-light);color:var(--accent);}
+.wchip-neutral{background:var(--surface2);color:var(--muted);}
+.widget-bar-row{display:flex;align-items:center;gap:8px;margin-top:6px;}
+.widget-bar-bg{flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;}
+.widget-bar-fill{height:100%;border-radius:2px;transition:width .5s;}
+/* ── SEARCH BAR ── */
+.search-bar{display:flex;gap:8px;margin-bottom:14px;}
+.search-input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;}
+.search-input:focus{border-color:var(--accent);}
+.filter-select{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text2);outline:none;cursor:pointer;}
 /* ── TXN ROWS ── */
 .txn-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
 .txn-row:last-child{border-bottom:none;}
@@ -446,6 +474,21 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
           <div class="card-value negative" id="ov-liab">₹0</div>
           <div class="card-sub">Loans + Cards</div>
         </div>
+      </div>
+
+      <!-- SMART WIDGETS ROW 1 -->
+      <div class="widget-grid">
+        <div class="widget-card wc-green" id="w-salary"></div>
+        <div class="widget-card wc-orange" id="w-recurring"></div>
+        <div class="widget-card wc-teal" id="w-cashflow"></div>
+        <div class="widget-card wc-gold" id="w-nw-velocity"></div>
+      </div>
+      <!-- SMART WIDGETS ROW 2 -->
+      <div class="widget-grid">
+        <div class="widget-card wc-purple" id="w-tax-harvest"></div>
+        <div class="widget-card wc-blue" id="w-cc-score"></div>
+        <div class="widget-card wc-red" id="w-debt-paydown"></div>
+        <div class="widget-card wc-orange" id="w-lifestyle"></div>
       </div>
 
       <div class="two-col">
@@ -888,8 +931,30 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
     <div class="view" id="view-transactions">
       <div class="panel">
         <div class="panel-header"><span class="panel-title">All Transactions</span><button class="panel-action" onclick="openModal('txnModal')">+ Add</button></div>
-        <div class="panel-body" id="txn-list">
-          <div class="empty-state"><div class="empty-icon">≡</div>No transactions</div>
+        <div class="panel-body">
+          <div class="search-bar">
+            <input class="search-input" id="txn-search" placeholder="🔍 Search description..." oninput="renderTxns()">
+            <select class="filter-select" id="txn-filter-cat" onchange="renderTxns()">
+              <option value="">All Categories</option>
+              <option>Food &amp; Dining</option><option>Travel</option><option>Shopping</option>
+              <option>Utilities</option><option>Entertainment</option><option>Healthcare</option>
+              <option>Education</option><option>Insurance</option><option>Investment</option>
+              <option>Salary</option><option>EMI</option><option>Other</option>
+            </select>
+            <select class="filter-select" id="txn-filter-type" onchange="renderTxns()">
+              <option value="">All Types</option>
+              <option value="debit">Debits</option>
+              <option value="credit">Credits</option>
+            </select>
+            <select class="filter-select" id="txn-filter-member" onchange="renderTxns()">
+              <option value="">All Members</option>
+              <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option>
+              <option value="parents">Parents</option><option value="charan">Charan</option>
+              <option value="himaja">Himaja</option>
+            </select>
+          </div>
+          <div id="txn-list"><div class="empty-state"><div class="empty-icon">≡</div>No transactions</div></div>
+          <div id="txn-count" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:10px"></div>
         </div>
       </div>
     </div>
@@ -1825,6 +1890,7 @@ function renderAll() {
   renderBudget();
   renderTax();
   renderTxns();
+  renderWidgets();
 }
 
 // ─────────────────────────────────────────────
@@ -2607,10 +2673,20 @@ function renderTax() {
 // TRANSACTIONS
 // ─────────────────────────────────────────────
 function renderTxns() {
-  const list = filterByMember(D.transactions);
+  const search = (document.getElementById('txn-search')||{}).value||'';
+  const catF   = (document.getElementById('txn-filter-cat')||{}).value||'';
+  const typeF  = (document.getElementById('txn-filter-type')||{}).value||'';
+  const memF   = (document.getElementById('txn-filter-member')||{}).value||'';
+  let list = filterByMember(D.transactions);
+  if (search) list = list.filter(t => (t.desc||'').toLowerCase().includes(search.toLowerCase()));
+  if (catF)  list = list.filter(t => t.cat === catF);
+  if (typeF) list = list.filter(t => t.type === typeF);
+  if (memF)  list = list.filter(t => t.member === memF);
   const el = document.getElementById('txn-list');
+  const countEl = document.getElementById('txn-count');
   if (!list.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">≡</div>No transactions</div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#8801;</div>No transactions match your filters</div>';
+    if (countEl) countEl.textContent = '';
     return;
   }
   const catColors = {
@@ -2618,19 +2694,129 @@ function renderTxns() {
     'Entertainment':'#c0392b','Healthcare':'#4a6fa5','Education':'#c0692b','Insurance':'#7ab8a0',
     'Investment':'#3a7d54','Salary':'#3a7d54','EMI':'#7b5ea7','Other':'#8a8279'
   };
-  el.innerHTML = list.slice(0,60).map(t =>
+  const shown = list.slice(0,100);
+  el.innerHTML = shown.map(t =>
     `<div class="txn-row">
       <div class="txn-left">
         <div class="txn-dot" style="background:${catColors[t.cat]||'#8a8279'}"></div>
         <div>
           <div class="txn-name">${t.desc} ${memberTag(t.member)}</div>
-          <div class="txn-cat">${t.cat} · ${t.date}</div>
+          <div class="txn-cat">${t.cat} &middot; ${t.date}</div>
         </div>
       </div>
-      <div class="txn-amount ${t.type}">${t.type==='debit'?'−':'+'}${fmt(t.amount)}</div>
+      <div class="txn-amount ${t.type}">${t.type==='debit'?'&minus;':'+'}${fmt(t.amount)}</div>
     </div>`
   ).join('');
+  if (countEl) countEl.textContent = `Showing ${shown.length} of ${list.length} transactions`;
 }
+
+function renderWidgets() {
+  if (!document.getElementById('w-salary')) return;
+  const txns = D.transactions;
+  const now = new Date();
+  const cm = now.getMonth(), cy = now.getFullYear();
+  const pm = cm===0?11:cm-1, py = cm===0?cy-1:cy;
+  const txnMonth = (t,mo,yr) => { const d=new Date(t.date); return d.getMonth()===mo&&d.getFullYear()===yr; };
+  const debits  = (mo,yr) => txns.filter(t=>t.type==='debit'&&txnMonth(t,mo,yr));
+  const credits = (mo,yr) => txns.filter(t=>t.type==='credit'&&txnMonth(t,mo,yr));
+  const sum = arr => arr.reduce((s,t)=>s+t.amount,0);
+
+  // 1. SALARY CREDIT TRACKER
+  const salTxns = txns.filter(t=>t.type==='credit'&&/salary|neft.*cr|salary.*credit|inward.*salary/i.test(t.desc||''));
+  const lastSal = [...salTxns].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+  const salAmt = lastSal?lastSal.amount:0;
+  const prevSal = sum(salTxns.filter(t=>txnMonth(t,pm,py)));
+  const salD = salAmt-prevSal;
+  document.getElementById('w-salary').innerHTML = `
+    <div class="widget-label">&#x1F4B0; Salary Credit Tracker</div>
+    <div class="widget-value" style="color:var(--green)">${fmt(salAmt)}</div>
+    <div class="widget-sub">${lastSal?'Last credited '+lastSal.date:'No salary detected yet'}</div>
+    ${salD!==0?`<div class="widget-chip ${salD>0?'wchip-up':'wchip-down'}">${salD>0?'&#8593;':'&#8595;'} ${fmt(Math.abs(salD))} vs prev</div>`:''}`;
+
+  // 2. RECURRING SPEND TRACKER
+  const recurKw = ['netflix','prime','spotify','hotstar','jio','airtel','gym','subscription'];
+  const recurThis = txns.filter(t=>t.type==='debit'&&txnMonth(t,cm,cy)&&recurKw.some(k=>(t.desc||'').toLowerCase().includes(k)));
+  const recurTotal = sum(recurThis);
+  document.getElementById('w-recurring').innerHTML = `
+    <div class="widget-label">&#x1F504; Recurring Spends</div>
+    <div class="widget-value" style="color:var(--orange)">${fmt(recurTotal)}</div>
+    <div class="widget-sub">${recurThis.length} subscriptions this month</div>
+    ${recurThis.slice(0,2).map(t=>`<div style="font-size:10px;color:var(--muted);margin-top:3px">&rarr; ${(t.desc||'').slice(0,28)}</div>`).join('')}`;
+
+  // 3. CASH FLOW FORECAST
+  const avg3Debit = [0,1,2].reduce((s,i)=>{
+    const mo=(cm-i+12)%12, yr=cy-(cm-i<0?1:0);
+    return s+sum(debits(mo,yr));
+  },0)/3;
+  const curIncome = sum(credits(cm,cy));
+  const surplus = curIncome-avg3Debit;
+  document.getElementById('w-cashflow').innerHTML = `
+    <div class="widget-label">&#x1F4C8; Cash Flow Forecast</div>
+    <div class="widget-value" style="color:${surplus>=0?'var(--accent2)':'var(--red)'}">${surplus>=0?'+':''}${fmt(surplus)}</div>
+    <div class="widget-sub">Est. month-end surplus<br>Avg spend: ${fmt(avg3Debit)} &middot; Income: ${fmt(curIncome)}</div>`;
+
+  // 4. NET WORTH VELOCITY
+  const hist = D.nwHistory;
+  let vel=0, velTxt='Not enough data';
+  if (hist.length>=2) {
+    vel = hist[hist.length-1].v - hist[hist.length-2].v;
+    const rate3 = hist.length>=3 ? (hist[hist.length-1].v-hist[hist.length-3].v)/2 : vel;
+    velTxt = (rate3>=0?'+':'')+fmt(Math.abs(rate3))+'/mo avg (3mo)';
+  }
+  document.getElementById('w-nw-velocity').innerHTML = `
+    <div class="widget-label">&#x26A1; NW Velocity</div>
+    <div class="widget-value" style="color:${vel>=0?'var(--accent)':'var(--red)'}">${vel>=0?'+':''}${fmt(vel)}</div>
+    <div class="widget-sub">${velTxt}</div>
+    <div class="widget-chip ${vel>=0?'wchip-up':'wchip-down'}">${vel>=0?'&#8593; Growing':'&#8595; Shrinking'}</div>`;
+
+  // 5. TAX HARVEST INTELLIGENCE
+  const investGains = D.investments.reduce((s,i)=>s+(i.value-i.cost),0);
+  const harvestRoom = Math.max(0,100000-Math.max(0,investGains));
+  const npsRoom = Math.max(0,50000-(D.nps.fyContrib||0));
+  const s80cLeft = Math.max(0,150000-(D.tax.s80c||0));
+  document.getElementById('w-tax-harvest').innerHTML = `
+    <div class="widget-label">&#x1F9E0; Tax-Harvest Intel</div>
+    <div class="widget-value" style="color:var(--accent3)">${fmt(harvestRoom)}</div>
+    <div class="widget-sub">LTCG tax-free headroom</div>
+    ${npsRoom>0?`<div class="widget-chip wchip-warn">NPS: ${fmt(npsRoom)} left</div>`:''}
+    ${s80cLeft>0?`<div class="widget-chip wchip-neutral" style="margin-left:4px">80C: ${fmt(s80cLeft)} left</div>`:''}`;
+
+  // 6. CREDIT CARD OPTIMISATION SCORE
+  const totLim = D.cards.reduce((s,c)=>s+c.limit,0);
+  const totOut = D.cards.reduce((s,c)=>s+c.outstanding,0);
+  const utilPct = totLim?Math.round(totOut/totLim*100):0;
+  const score = Math.max(0,Math.min(100,100-utilPct*1.5));
+  const scColor = score>=75?'var(--green)':score>=50?'var(--accent)':'var(--red)';
+  document.getElementById('w-cc-score').innerHTML = `
+    <div class="widget-label">&#x1F4B3; CC Optimisation Score</div>
+    <div class="widget-value" style="color:${scColor}">${Math.round(score)}<span style="font-size:12px;color:var(--muted)">/100</span></div>
+    <div class="widget-bar-row"><div class="widget-bar-bg"><div class="widget-bar-fill" style="width:${score}%;background:${scColor}"></div></div></div>
+    <div class="widget-sub">Utilization ${utilPct}% &middot; ${fmt(Math.max(0,totLim-totOut))} available</div>`;
+
+  // 7. DEBT PAYDOWN VISUALISER
+  const totDebt = D.loans.reduce((s,l)=>s+l.outstanding,0);
+  const totPrinc = D.loans.reduce((s,l)=>s+l.principal,0);
+  const paidPct = totPrinc?Math.round((1-totDebt/totPrinc)*100):0;
+  const totEMI  = D.loans.reduce((s,l)=>s+l.emi,0);
+  document.getElementById('w-debt-paydown').innerHTML = `
+    <div class="widget-label">&#x1F3AF; Debt Paydown</div>
+    <div class="widget-value" style="color:var(--red)">${fmt(totDebt)}</div>
+    <div class="widget-bar-row"><div class="widget-bar-bg"><div class="widget-bar-fill" style="width:${paidPct}%;background:var(--green)"></div></div><span style="font-size:10px;color:var(--muted);margin-left:4px">${paidPct}% paid</span></div>
+    <div class="widget-sub">EMI: ${fmt(totEMI)}/mo &middot; ${D.loans.length} loan(s)</div>`;
+
+  // 8. LIFESTYLE INFLATION DETECTOR
+  const skip = ['Salary','Investment','EMI'];
+  const curSp  = sum(debits(cm,cy).filter(t=>!skip.includes(t.cat)));
+  const prevSp = sum(debits(pm,py).filter(t=>!skip.includes(t.cat)));
+  const infl = prevSp?((curSp-prevSp)/prevSp*100).toFixed(1):0;
+  const inflC = infl>10?'var(--red)':infl>0?'var(--orange)':'var(--green)';
+  document.getElementById('w-lifestyle').innerHTML = `
+    <div class="widget-label">&#x1F4C8; Lifestyle Inflation</div>
+    <div class="widget-value" style="color:${inflC}">${infl>0?'+':''}${infl}%</div>
+    <div class="widget-sub">vs last month &middot; This mo: ${fmt(curSp)}<br>Last mo: ${fmt(prevSp)}</div>
+    <div class="widget-chip ${infl>10?'wchip-down':infl>0?'wchip-warn':'wchip-up'}">${infl>10?'&#x26A0;&#xFE0F; Inflating':infl>0?'&#x26A1; Mild rise':'&#x2713; Stable'}</div>`;
+}
+
 
 // ─────────────────────────────────────────────
 // CSV IMPORT
@@ -2645,13 +2831,12 @@ const BANK_CONFIGS = {
     skipRows:1,
     parse(row) {
       const o = row[0] === "" ? 1 : 0;
-      const desc = row[4+o];
-      if (!desc) return null;
-      const date = parseDate(row[2+o],'DD/MM/YYYY') || parseDate(row[2+o],'YYYY-MM-DD');
+      const desc = row[4+o] || "Transaction";
+      const date = parseDate(row[2+o],'DD/MM/YYYY') || parseDate(row[2+o],'YYYY-MM-DD') || parseDate(row[2+o],'MM/DD/YYYY');
       if (!date) return null;
       const debit = cleanAmt(row[5+o]), credit = cleanAmt(row[6+o]);
       if (debit===0 && credit===0) return null;
-      return {date, desc:desc.trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(desc)};
+      return {date, desc:desc.toString().trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(desc.toString())};
     }
   },
   'icici-cc': {
