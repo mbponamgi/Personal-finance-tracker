@@ -1575,9 +1575,13 @@ function parseCSV(event) {
     const resultEl = document.getElementById('parse-result');
     resultEl.style.display = 'block';
     const statusEl = document.getElementById('parse-status-badge');
+    
+    const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const debugText = `Row 0: ${rows[0] ? escapeHtml(JSON.stringify(rows[0])) : 'None'}<br>Row 1: ${rows[1] ? escapeHtml(JSON.stringify(rows[1])) : 'None'}<br>Row 2: ${rows[2] ? escapeHtml(JSON.stringify(rows[2])) : 'None'}`;
+    
     statusEl.innerHTML = parsedRows.length > 0
       ? `<span class="parse-status parse-ok">✓ ${parsedRows.length} transactions found</span>`
-      : `<span class="parse-status" style="background:var(--red-light);color:var(--red);white-space:normal;display:block;padding:8px">✗ No transactions parsed.<br><br>First failed row:<br>${firstFailed ? JSON.stringify(firstFailed) : 'Empty'}</span>`;
+      : `<span class="parse-status" style="background:var(--red-light);color:var(--red);white-space:normal;display:block;padding:8px">✗ No transactions parsed.<br><br>Debug Info:<br>${debugText}</span>`;
     const table = document.getElementById('parse-preview-table');
     table.innerHTML = `<div class="parse-row"><div class="parse-cell parse-header val">Date</div><div class="parse-cell parse-header val">Description</div><div class="parse-cell parse-header val">Amount</div><div class="parse-cell parse-header val">Type</div><div class="parse-cell parse-header val">Category</div></div>` +
       previewRows.filter(r=>!r.header).slice(0,8).map(r =>
