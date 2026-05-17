@@ -1912,9 +1912,19 @@ function syncLoansFromTxns() {
   console.log("Current D.transactions count:", D.transactions.length);
   let changed = false;
   
+  // Remove any existing apple-related loans immediately
+  const initialCount = D.loans.length;
+  D.loans = D.loans.filter(l => !/apple/i.test(l.name) && !/apple/i.test(l.lender || ''));
+  if (D.loans.length !== initialCount) {
+    console.log("Removed Apple-related loans from D.loans");
+    changed = true;
+  }
+  
   // 1. Self-healing loop: Dynamically correct transaction categories to "EMI" if they match any active loan in D.loans
   let txnsUpdated = false;
   D.transactions.forEach(t => {
+    // Skip apple-related transactions for loans
+    if (/apple/i.test(t.desc)) return;
     if (t.type === 'debit' && t.cat !== 'EMI') {
       const tAmt = Number(t.amount);
       const matchingLoan = D.loans.find(l => {
@@ -1937,6 +1947,8 @@ function syncLoansFromTxns() {
 
   const uniqueNewEmis = {};
   D.transactions.forEach(r => {
+    // Completely exclude Apple purchases from generating loans
+    if (/apple/i.test(r.desc)) return;
     if (r.cat === 'EMI' || /emi|loan|finance|bajaj|muthoot|cholamandalam|chola|hdb|home credit|ach debit|nach debit|ecs debit|auto debit|mandate/i.test(r.desc)) {
       let base = r.desc || '';
       if (base.includes('/')) {
