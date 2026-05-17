@@ -2640,15 +2640,15 @@ let parsedRows = [];
 const BANK_CONFIGS = {
   'icici-salary': {
     label:'ICICI Bank (Savings/Salary)', account:'icici-salary',
-    hint:'ICICI CSV: Date, Description, Debit, Credit, Balance',
+    hint:'ICICI CSV: S No., Value Date, Transaction Date, Cheque Number, Transaction Remarks, Withdrawal Amount(INR), Deposit Amount(INR), Balance(INR)',
     skipRows:1,
     parse(row) {
-      if (!row[1]) return null;
-      const date = parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD');
+      if (!row[4]) return null;
+      const date = parseDate(row[2],'DD/MM/YYYY') || parseDate(row[2],'YYYY-MM-DD');
       if (!date) return null;
-      const debit = cleanAmt(row[2]), credit = cleanAmt(row[3]);
+      const debit = cleanAmt(row[5]), credit = cleanAmt(row[6]);
       if (debit===0 && credit===0) return null;
-      return {date, desc:row[1].trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(row[1])};
+      return {date, desc:row[4].trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(row[4])};
     }
   },
   'icici-cc': {
