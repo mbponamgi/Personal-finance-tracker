@@ -3365,7 +3365,7 @@ function renderWidgets() {
   const sum = arr => arr.reduce((s,t)=>s+t.amount,0);
 
   // 1. SALARY CREDIT TRACKER
-  const salTxns = txns.filter(t=>t.type==='credit'&&/salary|neft.*cr|salary.*credit|inward.*salary/i.test(t.desc||''));
+  const salTxns = txns.filter(t=>t.type==='credit' && (t.cat === 'Salary' || /salary|neft.*cr|salary.*credit|inward.*salary/i.test(t.desc||'')));
   const lastSal = [...salTxns].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
   const salAmt = lastSal?lastSal.amount:0;
   const prevSal = sum(salTxns.filter(t=>txnMonth(t,pm,py)));
