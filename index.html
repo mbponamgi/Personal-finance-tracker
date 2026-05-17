@@ -1911,9 +1911,33 @@ function syncLoansFromTxns() {
   console.log("Current D.loans:", D.loans);
   console.log("Current D.transactions count:", D.transactions.length);
   let changed = false;
+  
+  // 1. Self-healing loop: Dynamically correct transaction categories to "EMI" if they match any active loan in D.loans
+  let txnsUpdated = false;
+  D.transactions.forEach(t => {
+    if (t.type === 'debit' && t.cat !== 'EMI') {
+      const tAmt = Number(t.amount);
+      const matchingLoan = D.loans.find(l => {
+        const loanEmi = Number(l.emi);
+        const emiMatch = Math.abs(loanEmi - tAmt) < 10;
+        const nameMatch = t.desc.toLowerCase().includes(l.name.toLowerCase()) || 
+                          l.name.toLowerCase().includes(t.desc.toLowerCase()) ||
+                          (l.lender && (t.desc.toLowerCase().includes(l.lender.toLowerCase()) || 
+                                       l.lender.toLowerCase().includes(t.desc.toLowerCase())));
+        return emiMatch && nameMatch;
+      });
+      if (matchingLoan) {
+        console.log(`Dynamically corrected transaction category to "EMI" for: "${t.desc}" (₹${t.amount}) to match active loan "${matchingLoan.name}"`);
+        t.cat = 'EMI';
+        txnsUpdated = true;
+      }
+    }
+  });
+  if (txnsUpdated) changed = true;
+
   const uniqueNewEmis = {};
   D.transactions.forEach(r => {
-    if (r.cat === 'EMI' || /emi|loan|finance|bajaj|muthoot|cholamandalam|hdb|home credit/i.test(r.desc)) {
+    if (r.cat === 'EMI' || /emi|loan|finance|bajaj|muthoot|cholamandalam|chola|hdb|home credit|ach debit|nach debit|ecs debit|auto debit|mandate/i.test(r.desc)) {
       let base = r.desc || '';
       if (base.includes('/')) {
         const parts = base.split('/');
@@ -3162,7 +3186,7 @@ function autoCategory(desc, amount) {
   if (/school|college|udemy|coursera|education|tuition|fees/i.test(d)) return 'Education';
   if (/insurance|lic|hdfc life|bajaj|star health/i.test(d)) return 'Insurance';
   if (/mutual fund|sip|zerodha|groww|upstox|nse|bse|dividend/i.test(d)) return 'Investment';
-  if (/emi|loan|home loan|car loan|finance|bajaj|muthoot|cholamandalam|hdb|home credit/i.test(d)) return 'EMI';
+  if (/emi|loan|home loan|car loan|finance|bajaj|muthoot|cholamandalam|chola|hdb|home credit|ach debit|nach debit|ecs debit|auto debit|mandate|auto-debit/i.test(d)) return 'EMI';
   if (/donation|charity|ngo|relief|temple|church|mosque|foundation/i.test(d)) return 'Donation';
   if (/salary|credit|neft cr|upi cr|rtgs cr/i.test(d)) return 'Salary';
   return 'Other';
