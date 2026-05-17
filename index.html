@@ -1906,7 +1906,49 @@ function newTax(inc) {
 // ─────────────────────────────────────────────
 // RENDER ALL
 // ─────────────────────────────────────────────
+function syncLoansFromTxns() {
+  let changed = false;
+  const uniqueNewEmis = {};
+  D.transactions.forEach(r => {
+    if (r.cat === 'EMI' || /emi|loan|finance|bajaj|muthoot|cholamandalam|hdb|home credit/i.test(r.desc)) {
+      let base = r.desc || '';
+      if (base.includes('/')) {
+        const parts = base.split('/');
+        base = ['UPI','NEFT','IMPS','RTGS','BIL'].includes(parts[0]) ? (parts[1] || base) : parts[0];
+      }
+      base = base.trim() || 'Auto-Detected Loan';
+      const key = base + '_' + r.amount;
+      uniqueNewEmis[key] = { ...r, baseName: base };
+    }
+  });
+
+  Object.values(uniqueNewEmis).forEach(r => {
+    const isAutoLoan = (r.amount === 23790);
+    const baseName = isAutoLoan ? 'Auto Loan' : r.baseName;
+    const match = D.loans.find(l => Math.abs(l.emi - r.amount) < 10 || l.name.toLowerCase() === baseName.toLowerCase());
+    if (!match) {
+      D.loans.push({
+        id: Date.now() + Math.random(),
+        type: isAutoLoan ? 'car' : 'other',
+        name: baseName,
+        lender: isAutoLoan ? 'Standard Chartered' : 'Auto-detected from bank',
+        member: currentMember === 'all' ? 'madhu' : currentMember,
+        principal: r.amount * 24, // Stub data (2 years)
+        outstanding: r.amount * 24,
+        emi: r.amount,
+        rate: 10,
+        tenure: 24,
+        emiDay: parseInt((r.date||'').split('-')[2], 10) || 1,
+        intPaid: 0
+      });
+      changed = true;
+    }
+  });
+  if (changed) save();
+}
+
 function renderAll() {
+  syncLoansFromTxns();
   renderOv();
   renderAccounts();
   renderCards();
@@ -2036,30 +2078,30 @@ function renderOv() {
 function renderTxnIntel() {
   const txns = filterByMember(D.transactions);
   
-  // 1. Auto-Detected EMIs
+  // 1. Active EMIs (Sync'd from both sides)
   const emiEl = document.getElementById('ov-txn-emis');
-  const emiTxns = txns.filter(t => t.cat === 'EMI' || /emi|loan/i.test(t.desc));
-  const uniqueEmis = {};
-  emiTxns.forEach(t => {
-    // Extract base description to group recurring EMIs properly
-    let base = t.desc || '';
-    if (base.includes('/')) {
-      const parts = base.split('/');
-      base = ['UPI','NEFT','IMPS','RTGS','BIL'].includes(parts[0]) ? (parts[1] || base) : parts[0];
-    }
-    base = base.trim() || 'EMI Payment';
-    const key = base + '_' + t.amount; // Use amount to differentiate if names are similar
-    if (!uniqueEmis[key] || new Date(t.date) > new Date(uniqueEmis[key].date)) {
-      uniqueEmis[key] = { ...t, baseName: base };
-    }
+  const panelTitle = emiEl ? emiEl.previousElementSibling.querySelector('.panel-title') : null;
+  if (panelTitle) panelTitle.innerHTML = '&#x1F4CB; Active EMIs';
+  
+  // Create a unified list of EMIs
+  const unifiedEmis = [];
+  D.loans.forEach(l => {
+    // find latest payment for this loan from txns if any
+    const latestTxn = txns.filter(t => Math.abs(t.amount - l.emi) < 10 || t.desc.toLowerCase().includes(l.name.toLowerCase()))
+                          .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+    unifiedEmis.push({
+      name: l.name,
+      amount: l.emi,
+      date: latestTxn ? latestTxn.date : 'Manual Entry'
+    });
   });
-  const emiList = Object.values(uniqueEmis).sort((a,b) => b.amount - a.amount);
-  if (!emiList.length) {
-    if(emiEl) emiEl.innerHTML = '<div class="empty-state"><div class="empty-icon">≈</div>Import transactions to detect EMIs</div>';
+
+  if (!unifiedEmis.length) {
+    if(emiEl) emiEl.innerHTML = '<div class="empty-state"><div class="empty-icon">≈</div>No active EMIs</div>';
   } else {
-    if(emiEl) emiEl.innerHTML = emiList.map(t => `
+    if(emiEl) emiEl.innerHTML = unifiedEmis.sort((a,b)=>b.amount-a.amount).map(t => `
       <div class="data-row" style="padding:6px 0">
-        <div><div style="font-size:12px;font-weight:500">${(t.baseName||t.desc).slice(0, 30)}</div><div style="font-size:10px;color:var(--muted)">Last paid: ${t.date}</div></div>
+        <div><div style="font-size:12px;font-weight:500">${t.name.slice(0, 30)}</div><div style="font-size:10px;color:var(--muted)">Last paid: ${t.date}</div></div>
         <div class="row-val negative">−${fmt(t.amount)}</div>
       </div>
     `).join('');
@@ -3183,48 +3225,10 @@ function confirmImport() {
   });
   D.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  // Auto-populate EMIs into Loans
-  let addedLoans = 0;
-  const uniqueNewEmis = {};
-  parsedRows.forEach(r => {
-    if (r.cat === 'EMI' || /emi|loan/i.test(r.desc)) {
-      let base = r.desc || '';
-      if (base.includes('/')) {
-        const parts = base.split('/');
-        base = ['UPI','NEFT','IMPS','RTGS','BIL'].includes(parts[0]) ? (parts[1] || base) : parts[0];
-      }
-      base = base.trim() || 'Auto-Detected Loan';
-      const key = base + '_' + r.amount;
-      uniqueNewEmis[key] = { ...r, baseName: base };
-    }
-  });
-
-  Object.values(uniqueNewEmis).forEach(r => {
-    const isAutoLoan = (r.amount === 23790);
-    const baseName = isAutoLoan ? 'Auto Loan' : r.baseName;
-    const match = D.loans.find(l => Math.abs(l.emi - r.amount) < 10 || l.name.toLowerCase() === baseName.toLowerCase());
-    if (!match) {
-      D.loans.push({
-        id: Date.now() + Math.random(),
-        type: isAutoLoan ? 'car' : 'other',
-        name: baseName,
-        lender: isAutoLoan ? 'Standard Chartered' : 'Auto-detected from bank',
-        member: currentMember === 'all' ? 'madhu' : currentMember,
-        principal: r.amount * 24, // Stub data (2 years)
-        outstanding: r.amount * 24,
-        emi: r.amount,
-        rate: 10,
-        tenure: 24,
-        emiDay: parseInt(r.date.split('-')[2], 10) || 1,
-        intPaid: 0
-      });
-      addedLoans++;
-    }
-  });
-
+  // EMIs are now auto-populated continuously via syncLoansFromTxns() in renderAll()
+  
   save(); renderAll();
   let msg = `✓ Imported ${added} txns`;
-  if (addedLoans > 0) msg += ` · Auto-added ${addedLoans} new loan(s)`;
   msg += ` · ${dupes} duplicates skipped`;
   
   document.getElementById('parse-status-badge').innerHTML =
