@@ -2041,11 +2041,16 @@ function renderTxnIntel() {
   const emiTxns = txns.filter(t => t.cat === 'EMI' || /emi|loan/i.test(t.desc));
   const uniqueEmis = {};
   emiTxns.forEach(t => {
-    // Extract base description to group recurring EMIs
-    let base = (t.desc||'').split('/')[0].trim();
-    if (!base) base = 'EMI Payment';
-    if (!uniqueEmis[base] || new Date(t.date) > new Date(uniqueEmis[base].date)) {
-      uniqueEmis[base] = t;
+    // Extract base description to group recurring EMIs properly
+    let base = t.desc || '';
+    if (base.includes('/')) {
+      const parts = base.split('/');
+      base = ['UPI','NEFT','IMPS','RTGS','BIL'].includes(parts[0]) ? (parts[1] || base) : parts[0];
+    }
+    base = base.trim() || 'EMI Payment';
+    const key = base + '_' + t.amount; // Use amount to differentiate if names are similar
+    if (!uniqueEmis[key] || new Date(t.date) > new Date(uniqueEmis[key].date)) {
+      uniqueEmis[key] = { ...t, baseName: base };
     }
   });
   const emiList = Object.values(uniqueEmis).sort((a,b) => b.amount - a.amount);
@@ -2054,7 +2059,7 @@ function renderTxnIntel() {
   } else {
     if(emiEl) emiEl.innerHTML = emiList.map(t => `
       <div class="data-row" style="padding:6px 0">
-        <div><div style="font-size:12px;font-weight:500">${t.desc.slice(0, 30)}</div><div style="font-size:10px;color:var(--muted)">Last paid: ${t.date}</div></div>
+        <div><div style="font-size:12px;font-weight:500">${(t.baseName||t.desc).slice(0, 30)}</div><div style="font-size:10px;color:var(--muted)">Last paid: ${t.date}</div></div>
         <div class="row-val negative">−${fmt(t.amount)}</div>
       </div>
     `).join('');
@@ -3064,7 +3069,7 @@ function autoCategory(desc) {
   if (/school|college|udemy|coursera|education|tuition|fees/i.test(d)) return 'Education';
   if (/insurance|lic|hdfc life|bajaj|star health/i.test(d)) return 'Insurance';
   if (/mutual fund|sip|zerodha|groww|upstox|nse|bse|dividend/i.test(d)) return 'Investment';
-  if (/emi|loan|home loan|car loan/i.test(d)) return 'EMI';
+  if (/emi|loan|home loan|car loan|finance|bajaj|muthoot|cholamandalam|hdb|home credit/i.test(d)) return 'EMI';
   if (/donation|charity|ngo|relief|temple|church|mosque|foundation/i.test(d)) return 'Donation';
   if (/salary|credit|neft cr|upi cr|rtgs cr/i.test(d)) return 'Salary';
   return 'Other';
@@ -3182,13 +3187,20 @@ function confirmImport() {
   const uniqueNewEmis = {};
   parsedRows.forEach(r => {
     if (r.cat === 'EMI' || /emi|loan/i.test(r.desc)) {
-      uniqueNewEmis[r.desc.split('/')[0].trim() || 'Loan'] = r;
+      let base = r.desc || '';
+      if (base.includes('/')) {
+        const parts = base.split('/');
+        base = ['UPI','NEFT','IMPS','RTGS','BIL'].includes(parts[0]) ? (parts[1] || base) : parts[0];
+      }
+      base = base.trim() || 'Auto-Detected Loan';
+      const key = base + '_' + r.amount;
+      uniqueNewEmis[key] = { ...r, baseName: base };
     }
   });
 
   Object.values(uniqueNewEmis).forEach(r => {
-    const baseName = r.desc.split('/')[0].trim() || 'Auto-Detected Loan';
-    const match = D.loans.find(l => Math.abs(l.emi - r.amount) < 10 || l.name === baseName);
+    const baseName = r.baseName;
+    const match = D.loans.find(l => Math.abs(l.emi - r.amount) < 10 || l.name.toLowerCase() === baseName.toLowerCase());
     if (!match) {
       D.loans.push({
         id: Date.now() + Math.random(),
