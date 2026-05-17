@@ -1939,6 +1939,7 @@ function syncLoansFromTxns() {
       if (matchingLoan) {
         console.log(`Dynamically corrected transaction category to "EMI" for: "${t.desc}" (₹${t.amount}) to match active loan "${matchingLoan.name}"`);
         t.cat = 'EMI';
+        t.type = 'debit'; // Always force EMI to be a debit transaction
         txnsUpdated = true;
       }
     }
@@ -2236,21 +2237,36 @@ function renderMemberNW() {
 
 function renderSpend() {
   const cats = {};
-  const cm = new Date().getMonth();
-  const cy = new Date().getFullYear();
-  filterByMember(D.transactions).filter(t =>
-    t.type === 'debit' &&
+  const txns = filterByMember(D.transactions).filter(t => t.type === 'debit');
+  const el = document.getElementById('ov-spend');
+  if (!txns.length) {
+    if (el) el.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>No transactions found</div>';
+    return;
+  }
+  
+  // Dynamically use the month and year of the latest transaction in the database
+  const sortedTxns = [...txns].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const latestDate = new Date(sortedTxns[0].date);
+  const cm = latestDate.getMonth();
+  const cy = latestDate.getFullYear();
+  
+  const monthName = latestDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const titleContainer = el ? el.previousElementSibling : null;
+  const titleEl = titleContainer ? titleContainer.querySelector('.panel-title') : null;
+  if (titleEl) titleEl.innerHTML = `&#x224B; Monthly Spend (${monthName})`;
+
+  txns.filter(t =>
     new Date(t.date).getMonth() === cm &&
     new Date(t.date).getFullYear() === cy
   ).forEach(t => { cats[t.cat] = (cats[t.cat]||0) + t.amount; });
-  const el = document.getElementById('ov-spend');
+
   if (!Object.keys(cats).length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>No transactions this month</div>';
+    if (el) el.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>No transactions this month</div>';
     return;
   }
   const total = Object.values(cats).reduce((a,b)=>a+b,0);
   const colors = ['#b5813a','#4a7c6f','#7b5ea7','#3a7d54','#c0692b','#4a6fa5','#7ab8a0','#b8a07e'];
-  el.innerHTML = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i) =>
+  if (el) el.innerHTML = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i) =>
     `<div class="spend-row">
       <div class="spend-label">${cat}</div>
       <div class="spend-bar-wrap"><div class="spend-bar-fill" style="width:${(amt/total*100).toFixed(0)}%;background:${colors[i%colors.length]}"></div></div>
@@ -3301,10 +3317,12 @@ function confirmImport() {
   parsedRows.forEach(r => {
     const key = r.date+'|'+r.desc+'|'+r.amount;
     if (existing.has(key)) { dupes++; return; }
+    const cat = r.cat;
+    const type = cat === 'EMI' ? 'debit' : r.type; // Force EMI to always be debit
     D.transactions.unshift({
       id: Date.now()+Math.random(),
-      desc: r.desc, amount: r.amount, type: r.type,
-      cat: r.cat, member: currentMember === 'all' ? 'madhu' : currentMember,
+      desc: r.desc, amount: r.amount, type: type,
+      cat: cat, member: currentMember === 'all' ? 'madhu' : currentMember,
       date: r.date
     });
     added++;
