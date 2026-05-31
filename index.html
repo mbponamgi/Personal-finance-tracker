@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' fonts.googleapis.com fonts.gstatic.com; script-src 'self' 'unsafe-inline' cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; img-src 'self' data:; connect-src 'none';">
 <title>Family Finance OS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <style>
 /* ── THEME ── */
 :root {
@@ -369,7 +370,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
 /* SECTION DIVIDER */
 .section-head{font-family:'Lora',serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:12px;margin-top:4px;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" integrity="sha384-uLiAv4VcjM5H2Jsqzl8EajEaxPugj1CIzQaCjQ8c5//vC+elhxO5pZfXGxoLQi1W" crossorigin="anonymous"></script>
 <script>
   if (typeof window !== 'undefined' && window['pdfjs-dist/build/pdf']) {
     window.pdfjsLib = window['pdfjs-dist/build/pdf'];
@@ -1543,6 +1544,8 @@ const cr = n => '₹' + (Math.abs(n||0)/1e7).toFixed(2) + ' Cr';
 const lk = n => '₹' + (Math.abs(n||0)/1e5).toFixed(1) + ' L';
 const todayStr = () => new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 const pf = (v, max) => Math.min(Math.round((v/max)*100), 100);
+// Security: escape user-supplied strings before inserting into innerHTML
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -1946,7 +1949,7 @@ function scanTxnsForInsurance() {
         <input type="checkbox" id="scan-chk-${idx}" checked style="width:18px;height:18px;accent-color:var(--accent)">
         <div style="flex:1">
           <div style="font-weight:600;font-size:14px;color:var(--accent)">${t.insurer}</div>
-          <div style="font-size:12px;color:var(--text);margin-bottom:6px">Txn: ${t.desc}</div>
+          <div style="font-size:12px;color:var(--text);margin-bottom:6px">Txn: ${esc(t.desc)}</div>
           <div style="font-size:11px;color:var(--muted)">Date: ${t.date} | Amount: <span style="font-weight:600;color:var(--text)">₹${t.amount.toLocaleString()}</span></div>
           <div style="margin-top:8px;display:flex;gap:8px">
             <input type="text" id="scan-nominee-${idx}" placeholder="Nominee Name" style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;flex:1;background:var(--surface2);color:var(--text)">
@@ -2495,7 +2498,7 @@ function renderOv() {
       return `<div class="data-row">
         <div class="row-left">
           <div class="row-icon" style="background:rgba(181,129,58,.1)">≈</div>
-          <div><div class="row-name">${l.name}</div><div class="row-sub">${memberTag(l.member)} · EMI ${fmt(l.emi)}/mo</div></div>
+          <div><div class="row-name">${esc(l.name)}</div><div class="row-sub">${memberTag(l.member)} · EMI ${fmt(l.emi)}/mo</div></div>
         </div>
         <div class="row-right"><div class="row-val negative">${fmt(l.outstanding)}</div></div>
       </div>`;
@@ -2515,7 +2518,7 @@ function renderOv() {
       return `<div class="data-row">
         <div class="row-left">
           <span style="font-size:16px">${{life:'🛡',health:'❤️',auto:'🚗',other:'📋'}[p.type]||'📋'}</span>
-          <div><div class="row-name">${p.name}</div><div class="row-sub">${p.insurer}</div></div>
+          <div><div class="row-name">${esc(p.name)}</div><div class="row-sub">${esc(p.insurer)}</div></div>
         </div>
         <div class="row-right">
           <div class="row-val ${d<=7?'negative':''}" style="font-size:12px">${d<=0?'OVERDUE':d+' days'}</div>
@@ -2734,7 +2737,7 @@ function renderAccounts() {
       <div class="row-left">
         <div class="row-icon" style="background:var(--accent2-light);font-size:16px">⬡</div>
         <div>
-          <div class="row-name">${a.name} ${memberTag(a.member)}</div>
+          <div class="row-name">${esc(a.name)} ${memberTag(a.member)}</div>
           <div class="row-sub">${a.type} · Updated ${a.updated||'—'}</div>
         </div>
       </div>
@@ -2769,7 +2772,7 @@ function renderCards() {
     return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
-          <div style="font-size:13px;font-weight:500">${c.name} ${memberTag(c.member)}</div>
+          <div style="font-size:13px;font-weight:500">${esc(c.name)} ${memberTag(c.member)}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">Due: ${c.dueDate||'—'} · Min: ${fmt(c.minDue)}</div>
         </div>
         <div style="text-align:right">
@@ -2836,7 +2839,7 @@ function renderProperty() {
     taxListEl.innerHTML = withTax.sort((a,b)=>new Date(a.propTaxDue)-new Date(b.propTaxDue)).map(p => {
       const d = daysUntil(p.propTaxDue);
       return `<div class="data-row">
-        <div><div style="font-size:12px;font-weight:500">${p.name}</div><div style="font-size:10px;color:var(--muted)">${p.propTaxDue}</div></div>
+        <div><div style="font-size:12px;font-weight:500">${esc(p.name)}</div><div style="font-size:10px;color:var(--muted)">${esc(p.propTaxDue)}</div></div>
         <div style="text-align:right">
           <div class="${d<=0?'row-val negative':d<=30?'':'row-val'}" style="font-size:12px;color:${d<=0?'var(--red)':d<=30?'var(--accent)':'var(--text2)'}">${d<=0?'OVERDUE':d+' days'}</div>
           <div style="font-size:10px;color:var(--muted)">${fmt(p.propTax)}/yr</div>
@@ -2866,7 +2869,7 @@ function renderProperty() {
       <div class="prop-card-header">
         <div>
           <span class="prop-type-badge ${typeClasses[p.type]}">${typeIcons[p.type]} ${typeLabels[p.type]}</span>
-          <div class="prop-name" style="margin-top:6px">${p.name}</div>
+          <div class="prop-name" style="margin-top:6px">${esc(p.name)}</div>
           <div class="prop-location">${p.location||''} ${memberTag(p.member)}</div>
           ${p.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:4px">${p.notes}</div>` : ''}
         </div>
@@ -2919,7 +2922,7 @@ function renderGold() {
         <div class="gold-item-left">
           <div class="row-icon" style="background:var(--accent-light);color:var(--accent)">◎</div>
           <div>
-            <div class="row-name">${g.name} ${memberTag(g.member)}</div>
+            <div class="row-name">${esc(g.name)} ${memberTag(g.member)}</div>
             <div class="row-sub">${g.weight}g · ${g.purity}K · ${g.form}</div>
           </div>
         </div>
@@ -2978,7 +2981,7 @@ function renderInv() {
   tbody.innerHTML = list.map(inv => {
     const r = inv.cost ? (((inv.value-inv.cost)/inv.cost)*100).toFixed(1) : 0;
     return `<tr>
-      <td><div style="font-size:12px;font-weight:500">${inv.name}</div></td>
+      <td><div style="font-size:12px;font-weight:500">${esc(inv.name)}</div></td>
       <td><span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">${inv.type}</span></td>
       <td>${memberTag(inv.member)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(inv.cost)}</td>
@@ -3063,7 +3066,7 @@ function renderLoans() {
         <div class="loan-card-header">
           <div>
             <span class="loan-type ${typeClasses[l.type]}">${typeLabels[l.type]||l.type}</span>
-            <div style="font-size:14px;font-weight:500;margin-top:5px">${l.name} ${memberTag(l.member)}</div>
+            <div style="font-size:14px;font-weight:500;margin-top:5px">${esc(l.name)} ${memberTag(l.member)}</div>
             <div style="font-size:11px;color:var(--muted)">${l.lender||''}</div>
           </div>
           <div style="text-align:right">
@@ -3098,7 +3101,7 @@ function renderLoans() {
   } else {
     calEl.innerHTML = list.map(l => `
       <div class="data-row">
-        <div><div style="font-size:12px;font-weight:500">${l.name}</div><div style="font-size:10px;color:var(--muted)">${l.lender||''} · Day ${l.emiDay||'—'}</div></div>
+        <div><div style="font-size:12px;font-weight:500">${esc(l.name)}</div><div style="font-size:10px;color:var(--muted)">${esc(l.lender||'')} · Day ${esc(l.emiDay||'—')}</div></div>
         <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--accent)">${fmt(l.emi)}</div>
       </div>`).join('');
   }
@@ -3146,7 +3149,7 @@ function renderIns() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
             <span class="ins-type-badge ${typeClasses[p.type]}">${typeIcons[p.type]} ${typeLabels[p.type]}</span>${sourceBadge}
-            <div style="font-size:13px;font-weight:500;margin-top:5px">${p.name} ${memberTag(p.member)}</div>
+            <div style="font-size:13px;font-weight:500;margin-top:5px">${esc(p.name)} ${memberTag(p.member)}</div>
             <div style="font-size:11px;color:var(--muted)">${p.insurer}${p.polno?' · '+p.polno:''}</div>
           </div>
           <div style="text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:var(--accent)">${fmt(p.premium)}<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">${p.freq||'annual'}</div></div>
@@ -3376,7 +3379,7 @@ function renderTxns() {
       <div class="txn-left">
         <div class="txn-dot" style="background:${catColors[t.cat]||'#8a8279'}"></div>
         <div>
-          <div class="txn-name">${t.desc} ${memberTag(t.member)}</div>
+          <div class="txn-name">${esc(t.desc)} ${memberTag(t.member)}</div>
           <div class="txn-cat">${t.cat} &middot; ${t.date}</div>
         </div>
       </div>
@@ -3435,14 +3438,14 @@ function renderWidgets() {
     ${salD!==0?`<div class="widget-chip ${salD>0?'wchip-up':'wchip-down'}">${salD>0?'&#8593;':'&#8595;'} ${fmt(Math.abs(salD))} vs prev</div>`:''}`;
 
   // 2. RECURRING SPEND TRACKER
-  const recurKw = ['netflix','prime','spotify','hotstar','jio','airtel','gym','subscription'];
+  const recurKw = ['netflix','prime','spotify','hotstar','jio','airtel','gym','subscription','sids farm','nobroker'];
   const recurThis = txns.filter(t=>t.type==='debit'&&txnMonth(t,cm,cy)&&recurKw.some(k=>(t.desc||'').toLowerCase().includes(k)));
   const recurTotal = sum(recurThis);
   document.getElementById('w-recurring').innerHTML = `
     <div class="widget-label">&#x1F504; Recurring Spends</div>
     <div class="widget-value" style="color:var(--orange)">${fmt(recurTotal)}</div>
     <div class="widget-sub">${recurThis.length} subscriptions this month</div>
-    ${recurThis.slice(0,2).map(t=>`<div style="font-size:10px;color:var(--muted);margin-top:3px">&rarr; ${(t.desc||'').slice(0,28)}</div>`).join('')}`;
+    ${recurThis.slice(0,2).map(t=>`<div style="font-size:10px;color:var(--muted);margin-top:3px">&rarr; ${esc((t.desc||'').slice(0,28))}</div>`).join('')}`;
 
   // 3. CASH FLOW FORECAST
   const avg3Debit = [0,1,2].reduce((s,i)=>{
@@ -3741,7 +3744,7 @@ async function parseCSV(event) {
         parsedRows = [{ pran, tier1: tier1||0, tier2: tier2||0 }];
         document.getElementById('parse-result').style.display = 'block';
         document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ NPS Data Extracted from PDF</span>`;
-        document.getElementById('parse-preview-table').innerHTML = `<div class="parse-row"><div class="parse-cell parse-header val">PRAN</div><div class="parse-cell val">${pran || 'Not found'}</div></div>` +
+        document.getElementById('parse-preview-table').innerHTML = `<div class="parse-row"><div class="parse-cell parse-header val">PRAN</div><div class="parse-cell val">${esc(pran || 'Not found')}</div></div>` +
                           `<div class="parse-row"><div class="parse-cell parse-header val">Tier I Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier1||0).toLocaleString('en-IN')}</div></div>` +
                           `<div class="parse-row"><div class="parse-cell parse-header val">Tier II Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier2||0).toLocaleString('en-IN')}</div></div>`;
         document.getElementById('parse-summary').textContent = `File: ${file.name} (PDF)`;

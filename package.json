@@ -1,0 +1,27 @@
+{
+  "name": "personal-finance-tracker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "family-finance.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint family-finance.js",
+    "lint:fix": "eslint family-finance.js --fix"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mbponamgi/Personal-finance-tracker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/mbponamgi/Personal-finance-tracker/issues"
+  },
+  "homepage": "https://github.com/mbponamgi/Personal-finance-tracker#readme",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1"
+  }
+}
