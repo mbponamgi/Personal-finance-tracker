@@ -369,6 +369,13 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
 /* SECTION DIVIDER */
 .section-head{font-family:'Lora',serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:12px;margin-top:4px;}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script>
+  if (typeof window !== 'undefined' && window['pdfjs-dist/build/pdf']) {
+    window.pdfjsLib = window['pdfjs-dist/build/pdf'];
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+  }
+</script>
 </head>
 <body>
 
@@ -771,7 +778,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
       </div>
       <div class="two-col">
         <div class="panel">
-          <div class="panel-header"><span class="panel-title">NPS Details</span><button class="panel-action" onclick="openModal('npsModal')">Update</button></div>
+          <div class="panel-header"><span class="panel-title">NPS Details</span><button class="panel-action" onclick="openNpsModal()">Update</button></div>
           <div class="panel-body">
             <div class="tax-row"><span class="tax-key">PRAN</span><span class="tax-val" id="nps-pran-d">—</span></div>
             <div class="tax-row"><span class="tax-key">Tier I</span><span class="tax-val" id="nps-t1-d">₹0</span></div>
@@ -1006,15 +1013,19 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
               <button class="bank-tab" onclick="selectBank('icici-cc',this)">ICICI Credit Card</button>
               <button class="bank-tab" onclick="selectBank('sc',this)">Standard Chartered</button>
               <button class="bank-tab" onclick="selectBank('amex',this)">American Express</button>
+              <button class="bank-tab" onclick="selectBank('nps',this)">NPS Statement</button>
             </div>
           </div>
           <div id="bank-format-info" style="margin-bottom:14px"></div>
+          <div class="form-group" style="margin-bottom:14px; max-width:250px;">
+            <input class="form-input" type="password" id="import-pdf-password" placeholder="PDF Password (if any)">
+          </div>
           <div class="import-zone" onclick="document.getElementById('csvFile').click()">
             <div style="font-size:24px;margin-bottom:7px">📂</div>
-            <div>Drop CSV or Excel file or click to browse</div>
+            <div>Drop CSV, Excel, or PDF file or click to browse</div>
             <div style="font-size:10px;margin-top:4px;font-family:'DM Mono',monospace;color:var(--muted)" id="import-hint">Select a bank above, then upload</div>
           </div>
-          <input type="file" id="csvFile" accept=".csv,.CSV,.xls,.xlsx" style="display:none" onchange="parseCSV(event)">
+          <input type="file" id="csvFile" accept=".csv,.CSV,.xls,.xlsx,.pdf" style="display:none" onchange="parseCSV(event)">
           <div id="parse-result" style="margin-top:16px;display:none">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
               <div style="display:flex;align-items:center;gap:9px">
@@ -1383,6 +1394,16 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
     <button class="modal-close" onclick="closeModal('npsModal')">×</button>
     <div class="modal-title">Update NPS</div>
     <div class="form-grid">
+      <div class="form-group form-full">
+        <label class="form-label">Family Member</label>
+        <select class="form-select" id="m-nps-member" onchange="populateNpsForm()">
+          <option value="madhu">Madhu</option>
+          <option value="sailaja">Sailaja</option>
+          <option value="parents">Parents</option>
+          <option value="charan">Charan</option>
+          <option value="himaja">Himaja</option>
+        </select>
+      </div>
       <div class="form-group form-full"><label class="form-label">PRAN</label><input class="form-input" id="m-nps-pran" placeholder="Permanent Retirement Account Number"></div>
       <div class="form-group"><label class="form-label">Tier I Balance (₹)</label><input class="form-input" id="m-nps-t1" type="number" placeholder="0"></div>
       <div class="form-group"><label class="form-label">Tier II Balance (₹)</label><input class="form-input" id="m-nps-t2" type="number" placeholder="0"></div>
@@ -1471,7 +1492,7 @@ let D = {
   gold: [],
   goldRate: 7500,
   epf:  {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null},
-  nps:  {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75},
+  nps:  {},
   tax:  {gross:0, s80c:0, s80ccd:0, s24b:0, s80d:0, hra:0},
   transactions: [],
   budgets: {
@@ -1488,6 +1509,9 @@ function load() {
     if (s) {
       const parsed = JSON.parse(s);
       D = deepMerge(D, parsed);
+      if (D.nps && D.nps.tier1 !== undefined) {
+        D.nps = { 'madhu': Object.assign({}, D.nps) };
+      }
     }
   } catch(e) {}
 }
@@ -2131,8 +2155,28 @@ function saveEPF() {
   snapshotNW(); save(); renderAll(); closeModal('epfModal');
 }
 
+function openNpsModal() {
+  const m = currentMember === 'all' ? 'madhu' : currentMember;
+  const memSelect = document.getElementById('m-nps-member');
+  if (memSelect) memSelect.value = m;
+  populateNpsForm();
+  openModal('npsModal');
+}
+
+function populateNpsForm() {
+  const m = document.getElementById('m-nps-member') ? document.getElementById('m-nps-member').value : 'madhu';
+  const n = D.nps[m] || {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
+  document.getElementById('m-nps-pran').value = n.pran;
+  document.getElementById('m-nps-t1').value = n.tier1 || '';
+  document.getElementById('m-nps-t2').value = n.tier2 || '';
+  document.getElementById('m-nps-contrib').value = n.fyContrib || '';
+  document.getElementById('m-nps-sip').value = n.monthly || '';
+  document.getElementById('m-nps-eq').value = n.equityPct || 75;
+}
+
 function saveNPS() {
-  D.nps = {
+  const m = document.getElementById('m-nps-member') ? document.getElementById('m-nps-member').value : 'madhu';
+  D.nps[m] = {
     pran: document.getElementById('m-nps-pran').value,
     tier1: +document.getElementById('m-nps-t1').value || 0,
     tier2: +document.getElementById('m-nps-t2').value || 0,
@@ -2205,7 +2249,9 @@ function calcNW() {
   const inv = D.investments.reduce((s, i) => s + i.value, 0);
   const prop = D.properties.reduce((s, p) => s + p.value, 0);
   const goldVal = calcGoldValue();
-  const ret = D.epf.balance + D.nps.tier1 + D.nps.tier2;
+  let npsTotal = 0;
+  Object.values(D.nps).forEach(n => { npsTotal += (n.tier1||0) + (n.tier2||0); });
+  const ret = D.epf.balance + npsTotal;
   const loanLiab = D.loans.reduce((s, l) => s + l.outstanding, 0);
   const cardLiab = D.cards.reduce((s, c) => s + c.outstanding, 0);
   return liq + inv + prop + goldVal + ret - loanLiab - cardLiab;
@@ -2393,7 +2439,9 @@ function renderOv() {
   const loanLiab = loans.reduce((s, l) => s + l.outstanding, 0);
   const cardLiab = cards.reduce((s, c) => s + c.outstanding, 0);
   const totalLiab = loanLiab + cardLiab;
-  const nw = liq + propVal + inv + goldVal + D.epf.balance + D.nps.tier1 + D.nps.tier2 - totalLiab;
+  const npsData = getNpsData();
+  const npsTotal = npsData.tier1 + npsData.tier2;
+  const nw = liq + propVal + inv + goldVal + D.epf.balance + npsTotal - totalLiab;
 
   document.getElementById('ov-nw').textContent = fmt(nw);
   document.getElementById('ov-liquid').textContent = fmt(liq);
@@ -2414,7 +2462,7 @@ function renderOv() {
   }
 
   // Asset breakdown
-  const totalAssets = liq + propVal + inv + goldVal + D.epf.balance + D.nps.tier1 + D.nps.tier2;
+  const totalAssets = liq + propVal + inv + goldVal + D.epf.balance + npsTotal;
   const assetEl = document.getElementById('ov-assets-breakdown');
   if (totalAssets === 0) {
     assetEl.innerHTML = '<div class="empty-state"><div class="empty-icon">◈</div>Add assets to see breakdown</div>';
@@ -2424,7 +2472,7 @@ function renderOv() {
       {label:'Property', val:propVal, color:'#4a6fa5'},
       {label:'Investments', val:inv, color:'var(--accent3)'},
       {label:'Gold', val:goldVal, color:'var(--accent)'},
-      {label:'EPF/NPS', val:D.epf.balance+D.nps.tier1+D.nps.tier2, color:'var(--green)'},
+      {label:'EPF/NPS', val:D.epf.balance+npsTotal, color:'var(--green)'},
     ].filter(s => s.val > 0);
     assetEl.innerHTML = segments.map(s => {
       const pct = (s.val / totalAssets * 100).toFixed(1);
@@ -2651,7 +2699,8 @@ function renderAlerts() {
   if (cardOut > 0) alerts.push({type:'warn', msg:`Card outstanding of ${fmt(cardOut)} — clear before interest kicks in.`});
   const t = D.tax;
   if (t.gross > 0 && t.s80c < 150000) alerts.push({type:'info', msg:`Section 80C: ${fmt(150000-t.s80c)} headroom remaining.`});
-  if (D.nps.fyContrib < 50000 && t.gross > 0) alerts.push({type:'info', msg:`NPS 80CCD(1B): ${fmt(50000-D.nps.fyContrib)} unused — worth ${fmt((50000-D.nps.fyContrib)*.312)} in tax savings.`});
+  const npsData = getNpsData();
+  if (npsData.fyContrib < 50000 && t.gross > 0) alerts.push({type:'info', msg:`NPS 80CCD(1B): ${fmt(50000-npsData.fyContrib)} unused — worth ${fmt((50000-npsData.fyContrib)*.312)} in tax savings.`});
   D.insurance.filter(p => { const d=daysUntil(p.dueDate); return d!==null&&d<=30; }).forEach(p => {
     const d = daysUntil(p.dueDate);
     alerts.push({type:d<=0?'danger':'warn', msg:`${p.name} premium ${d<=0?'OVERDUE':'due in '+d+' days'} — ${fmt(p.premium)}`});
@@ -2963,8 +3012,17 @@ function renderEPF() {
 // ─────────────────────────────────────────────
 // NPS
 // ─────────────────────────────────────────────
+function getNpsData() {
+  if (currentMember === 'all') {
+    let t1=0, t2=0, fyc=0, mo=0;
+    Object.values(D.nps).forEach(n => { t1+=(n.tier1||0); t2+=(n.tier2||0); fyc+=(n.fyContrib||0); mo+=(n.monthly||0); });
+    return { pran:Object.keys(D.nps).length > 1 ? 'Multiple' : (Object.values(D.nps)[0]?.pran || ''), tier1:t1, tier2:t2, fyContrib:fyc, monthly:mo, equityPct:'-' };
+  }
+  return D.nps[currentMember] || {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
+}
+
 function renderNPS() {
-  const n = D.nps, tot = n.tier1 + n.tier2;
+  const n = getNpsData(), tot = n.tier1 + n.tier2;
   document.getElementById('nps-bal-d').textContent = fmt(tot);
   document.getElementById('nps-sip-d').textContent = fmt(n.monthly);
   document.getElementById('nps-tax-d').textContent = fmt(Math.min(n.fyContrib,50000)*.312);
@@ -2972,7 +3030,7 @@ function renderNPS() {
   document.getElementById('nps-t1-d').textContent = fmt(n.tier1);
   document.getElementById('nps-t2-d').textContent = fmt(n.tier2);
   document.getElementById('nps-contrib-d').textContent = fmt(n.fyContrib);
-  document.getElementById('nps-eq-d').textContent = (n.equityPct||75) + '%';
+  document.getElementById('nps-eq-d').textContent = n.equityPct === '-' ? '-' : (n.equityPct||75) + '%';
   const pct = pf(n.fyContrib, 50000);
   document.getElementById('nps-80ccd-pct').textContent = pct + '%';
   document.getElementById('nps-80ccd-bar').style.width = pct + '%';
@@ -3365,7 +3423,7 @@ function renderWidgets() {
   const sum = arr => arr.reduce((s,t)=>s+t.amount,0);
 
   // 1. SALARY CREDIT TRACKER
-  const salTxns = txns.filter(t=>t.type==='credit' && (t.cat === 'Salary' || /salary|neft.*cr|salary.*credit|inward.*salary/i.test(t.desc||'')));
+  const salTxns = txns.filter(t=>t.type==='credit' && (t.cat === 'Salary' || /salary|salaries|neft.*cr|salary.*credit|inward.*salary/i.test(t.desc||'')));
   const lastSal = [...salTxns].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
   const salAmt = lastSal?lastSal.amount:0;
   const prevSal = sum(salTxns.filter(t=>txnMonth(t,pm,py)));
@@ -3415,7 +3473,8 @@ function renderWidgets() {
   // 5. TAX HARVEST INTELLIGENCE
   const investGains = D.investments.reduce((s,i)=>s+(i.value-i.cost),0);
   const harvestRoom = Math.max(0,100000-Math.max(0,investGains));
-  const npsRoom = Math.max(0,50000-(D.nps.fyContrib||0));
+  const npsDataW = getNpsData();
+  const npsRoom = Math.max(0,50000-(npsDataW.fyContrib||0));
   const s80cLeft = Math.max(0,150000-(D.tax.s80c||0));
   document.getElementById('w-tax-harvest').innerHTML = `
     <div class="widget-label">&#x1F9E0; Tax-Harvest Intel</div>
@@ -3523,6 +3582,12 @@ const BANK_CONFIGS = {
       if (rawAmt===0) return null;
       return {date, desc:row[1].trim(), amount:Math.abs(rawAmt), type:rawAmt>0?'debit':'credit', cat:autoCategory(row[1], Math.abs(rawAmt))};
     }
+  },
+  'nps': {
+    label:'NPS Statement', account:'nps',
+    hint:'NPS Excel/CSV: Auto-detects PRAN and Tier I / Tier II balances.',
+    skipRows:0,
+    parse(row) { return null; }
   }
 };
 
@@ -3613,7 +3678,7 @@ function autoCategory(desc, amount) {
   if (/mutual fund|sip|zerodha|groww|upstox|nse|bse|dividend/i.test(d)) return 'Investment';
   if (/emi|loan|home loan|car loan|finance|bajaj|muthoot|cholamandalam|chola|hdb|home credit|ach debit|nach debit|ecs debit|auto debit|mandate|auto-debit/i.test(d)) return 'EMI';
   if (/donation|charity|ngo|relief|temple|church|mosque|foundation/i.test(d)) return 'Donation';
-  if (/salary|credit|neft cr|upi cr|rtgs cr/i.test(d)) return 'Salary';
+  if (/salary|salaries|credit|neft cr|upi cr|rtgs cr/i.test(d)) return 'Salary';
   return 'Other';
 }
 
@@ -3641,10 +3706,63 @@ function selectBank(bank, btn) {
   parsedRows = [];
 }
 
-function parseCSV(event) {
+async function parseCSV(event) {
   const file = event.target.files[0];
   if (!file) return;
   const cfg = BANK_CONFIGS[selectedBank];
+
+  if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    try {
+      const pwd = document.getElementById('import-pdf-password') ? document.getElementById('import-pdf-password').value : '';
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer, password: pwd }).promise;
+      let textAll = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        textAll += textContent.items.map(s => s.str).join(' ') + '\n';
+      }
+      textAll = textAll.toLowerCase();
+      if (selectedBank === 'nps') {
+        let pran = '', tier1 = 0, tier2 = 0;
+        const pranMatch = textAll.match(/pran.*?\b(\d{12})\b/i) || textAll.match(/\b(\d{12})\b/);
+        if (pranMatch) pran = pranMatch[1];
+        const t1Match = textAll.match(/tier\s*i\s*.*?balance.*?([\d,]+(\.\d{1,2})?)/i) 
+                     || textAll.match(/tier\s*i.*?holding.*?([\d,]+(\.\d{1,2})?)/i)
+                     || textAll.match(/tier\s*i.*?value.*?([\d,]+(\.\d{1,2})?)/i)
+                     || textAll.match(/tier\s*1.*?([\d,]+(\.\d{1,2})?)/i);
+        if (t1Match) tier1 = parseFloat(t1Match[1].replace(/,/g, ''));
+        const t2Match = textAll.match(/tier\s*ii\s*.*?balance.*?([\d,]+(\.\d{1,2})?)/i) 
+                     || textAll.match(/tier\s*ii.*?holding.*?([\d,]+(\.\d{1,2})?)/i)
+                     || textAll.match(/tier\s*ii.*?value.*?([\d,]+(\.\d{1,2})?)/i)
+                     || textAll.match(/tier\s*2.*?([\d,]+(\.\d{1,2})?)/i);
+        if (t2Match) tier2 = parseFloat(t2Match[1].replace(/,/g, ''));
+        
+        parsedRows = [{ pran, tier1: tier1||0, tier2: tier2||0 }];
+        document.getElementById('parse-result').style.display = 'block';
+        document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ NPS Data Extracted from PDF</span>`;
+        document.getElementById('parse-preview-table').innerHTML = `<div class="parse-row"><div class="parse-cell parse-header val">PRAN</div><div class="parse-cell val">${pran || 'Not found'}</div></div>` +
+                          `<div class="parse-row"><div class="parse-cell parse-header val">Tier I Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier1||0).toLocaleString('en-IN')}</div></div>` +
+                          `<div class="parse-row"><div class="parse-cell parse-header val">Tier II Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier2||0).toLocaleString('en-IN')}</div></div>`;
+        document.getElementById('parse-summary').textContent = `File: ${file.name} (PDF)`;
+        event.target.value = '';
+        return;
+      } else {
+        alert("PDF parsing is only supported for NPS statements currently.");
+        event.target.value = '';
+        return;
+      }
+    } catch(err) {
+      if (err.name === 'PasswordException') {
+        alert("This PDF is password protected! Please enter the password in the box above.");
+      } else {
+        alert("Error parsing PDF: " + err.message);
+      }
+      event.target.value = '';
+      return;
+    }
+  }
+
   const reader = new FileReader();
   reader.onload = function(e) {
     let rows = [];
@@ -3666,6 +3784,29 @@ function parseCSV(event) {
     }
 
     parsedRows = [];
+    if (selectedBank === 'nps') {
+      let pran = '', tier1 = 0, tier2 = 0;
+      const textAll = rows.map(r => r.join(' ')).join('\n').toLowerCase();
+      const pranMatch = textAll.match(/pran.*?\b(\d{12})\b/i) || textAll.match(/\b(\d{12})\b/);
+      if (pranMatch) pran = pranMatch[1];
+      const t1Match = textAll.match(/tier\s*i\s*.*?balance.*?([\d,]+(\.\d{1,2})?)/i) 
+                   || textAll.match(/tier\s*i.*?holding.*?([\d,]+(\.\d{1,2})?)/i)
+                   || textAll.match(/tier\s*i.*?value.*?([\d,]+(\.\d{1,2})?)/i);
+      if (t1Match) tier1 = parseFloat(t1Match[1].replace(/,/g, ''));
+      const t2Match = textAll.match(/tier\s*ii\s*.*?balance.*?([\d,]+(\.\d{1,2})?)/i) 
+                   || textAll.match(/tier\s*ii.*?holding.*?([\d,]+(\.\d{1,2})?)/i)
+                   || textAll.match(/tier\s*ii.*?value.*?([\d,]+(\.\d{1,2})?)/i);
+      if (t2Match) tier2 = parseFloat(t2Match[1].replace(/,/g, ''));
+      parsedRows = [{ pran, tier1: tier1||0, tier2: tier2||0 }];
+      document.getElementById('parse-result').style.display = 'block';
+      document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ NPS Data Extracted</span>`;
+      document.getElementById('parse-preview-table').innerHTML = `<div class="parse-row"><div class="parse-cell parse-header val">PRAN</div><div class="parse-cell val">${pran || 'Not found'}</div></div>` +
+                        `<div class="parse-row"><div class="parse-cell parse-header val">Tier I Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier1||0).toLocaleString('en-IN')}</div></div>` +
+                        `<div class="parse-row"><div class="parse-cell parse-header val">Tier II Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier2||0).toLocaleString('en-IN')}</div></div>`;
+      document.getElementById('parse-summary').textContent = `File: ${file.name} · Parsed NPS balances.`;
+      event.target.value = '';
+      return;
+    }
     const previewRows = [];
     const skipped = cfg.skipRows || 1;
     let firstFailed = null;
@@ -3708,6 +3849,20 @@ function parseCSV(event) {
 
 function confirmImport() {
   if (!parsedRows.length) return;
+  if (selectedBank === 'nps') {
+    const m = currentMember === 'all' ? 'madhu' : currentMember;
+    if (!D.nps[m]) D.nps[m] = {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
+    const data = parsedRows[0];
+    if (data.pran) D.nps[m].pran = data.pran;
+    if (data.tier1) D.nps[m].tier1 = data.tier1;
+    if (data.tier2) D.nps[m].tier2 = data.tier2;
+    snapshotNW(); save(); renderAll();
+    document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ Updated NPS Holdings</span>`;
+    document.getElementById('importConfirmBtn').textContent = 'Done ✓'; 
+    document.getElementById('importConfirmBtn').disabled = true;
+    parsedRows = [];
+    return;
+  }
   const cfg = BANK_CONFIGS[selectedBank];
   const existing = new Set(D.transactions.map(t => t.date+'|'+t.desc+'|'+t.amount));
   let added = 0, dupes = 0;
