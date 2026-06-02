@@ -2065,24 +2065,44 @@ async function startAIScan() {
   let extractedText = textInput;
   if (selectedPolicyFile && selectedPolicyFile.type === 'application/pdf') {
     try {
-      if (typeof pdfjsLib === 'undefined') {
-        await new Promise((resolve) => {
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
-          script.onload = () => { window.pdfjsLib = window['pdfjs-dist/build/pdf'] || pdfjsLib; pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js'; resolve(); };
-          document.head.appendChild(script);
-        });
-      }
+      const pdfjs = await ensurePdfJS();
       const arrayBuffer = await selectedPolicyFile.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
-      const pdf = await loadingTask.promise;
+      
+      let loadingTask;
+      let pdf;
+      let pdfPassword = '';
+      
+      while (true) {
+        try {
+          loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer), password: pdfPassword });
+          pdf = await loadingTask.promise;
+          break;
+        } catch (err) {
+          if (err.name === 'PasswordException') {
+            pdfPassword = prompt("This policy document is password-protected. Please enter the password to decrypt:");
+            if (pdfPassword === null) {
+              throw new Error("Password decryption cancelled by user.");
+            }
+          } else {
+            throw err;
+          }
+        }
+      }
+      
       const maxPages = Math.min(pdf.numPages, 3);
       for (let i = 1; i <= maxPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        extractedText += " " + textContent.items.map(item => item.str).join(" ");
+        extractedText += " " + (reconstructTextWithCoordinates(textContent) || textContent.items.map(item => item.str).join(" "));
       }
-    } catch(e) {}
+    } catch(e) {
+      alert("Error reading policy PDF: " + e.message);
+      document.getElementById('ai-drag-area').parentElement.style.display = 'block';
+      document.getElementById('ai-policy-text').parentElement.style.display = 'block';
+      document.getElementById('ai-scan-btn').style.display = 'inline-block';
+      document.getElementById('ai-scan-progress').style.display = 'none';
+      return;
+    }
   }
   
   const combined = (fileName + " " + extractedText).toLowerCase();
@@ -3545,6 +3565,296 @@ function renderWidgets() {
 // ─────────────────────────────────────────────
 let selectedBank = 'icici-salary';
 let parsedRows = [];
+let pendingPdfFile = null;
+
+async function ensurePdfJS() {
+  if (typeof window !== 'undefined' && window.pdfjsLib) return window.pdfjsLib;
+  if (typeof window !== 'undefined' && window['pdfjs-dist/build/pdf']) {
+    window.pdfjsLib = window['pdfjs-dist/build/pdf'];
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    return window.pdfjsLib;
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+    script.onload = () => {
+      window.pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        resolve(window.pdfjsLib);
+      } else {
+        reject(new Error("PDF.js loaded but is undefined on window"));
+      }
+    };
+    script.onerror = () => reject(new Error("Failed to load PDF.js from CDN. Verify internet connectivity."));
+    document.head.appendChild(script);
+  });
+}
+
+function reconstructTextWithCoordinates(textContent) {
+  const items = textContent.items;
+  if (!items || items.length === 0) return '';
+  
+  const positionedItems = items.map(item => {
+    const matrix = item.transform || [1, 0, 0, 1, 0, 0];
+    return {
+      text: item.str,
+      x: matrix[4],
+      y: matrix[5],
+      width: item.width || 0,
+      height: item.height || 0
+    };
+  });
+  
+  positionedItems.sort((a, b) => b.y - a.y);
+  
+  const lines = [];
+  let currentLineY = null;
+  let currentLineItems = [];
+  const lineTolerance = 4; // Tolerance for grouping items physically on the same row
+  
+  for (const item of positionedItems) {
+    if (currentLineY === null) {
+      currentLineY = item.y;
+      currentLineItems.push(item);
+    } else if (Math.abs(item.y - currentLineY) <= lineTolerance) {
+      currentLineItems.push(item);
+    } else {
+      currentLineItems.sort((a, b) => a.x - b.x);
+      lines.push(currentLineItems);
+      currentLineY = item.y;
+      currentLineItems = [item];
+    }
+  }
+  if (currentLineItems.length > 0) {
+    currentLineItems.sort((a, b) => a.x - b.x);
+    lines.push(currentLineItems);
+  }
+  
+  let reconstructed = '';
+  for (const line of lines) {
+    let lineStr = '';
+    let lastX = null;
+    
+    for (const item of line) {
+      if (lastX !== null) {
+        const gap = item.x - lastX;
+        // Inject physical tab delimiters when column separations exceed standard margins
+        if (gap > 12) {
+          lineStr += '\t';
+        } else {
+          lineStr += ' ';
+        }
+      }
+      lineStr += item.text;
+      lastX = item.x + item.width;
+    }
+    reconstructed += lineStr + '\n';
+  }
+  
+  return reconstructed;
+}
+
+let detectedCardData = null;
+
+function extractCardMetadata(text, bankType) {
+  const cleanText = text.replace(/\s+/g, ' ');
+  
+  let outstanding = 0;
+  let limit = 0;
+  let dueDate = '';
+  let minDue = 0;
+  let name = '';
+  
+  if (bankType === 'icici-cc') {
+    name = "ICICI Credit Card";
+  } else if (bankType === 'amex') {
+    name = "American Express Card";
+  } else if (bankType === 'sc') {
+    name = "Standard Chartered Card";
+  } else {
+    name = "Credit Card";
+  }
+  
+  const outPatterns = [
+    /(?:total\s+amount\s+due|total\s+due|amount\s+due|outstanding\s+balance|total\s+outstanding)\D*?([\d,]+\.\d{2})/i,
+    /(?:payment\s+due|due\s+amount)\D*?([\d,]+\.\d{2})/i
+  ];
+  for (const pattern of outPatterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      outstanding = parseFloat(match[1].replace(/,/g, ''));
+      break;
+    }
+  }
+  
+  const limitPatterns = [
+    /(?:credit\s+limit|card\s+limit|credit\s+limit\s+rs)\D*?([\d,]+\.\d{2})/i,
+    /(?:credit\s+limit|card\s+limit|limit)\D*?([\d,]+)\b/i
+  ];
+  for (const pattern of limitPatterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      limit = parseFloat(match[1].replace(/,/g, ''));
+      break;
+    }
+  }
+  
+  const duePatterns = [
+    /(?:payment\s+due\s+date|due\s+date|pay\s+by)\s*[:=-]?\s*([a-zA-Z0-9\s,\/-]{8,15})/i,
+    /\b\d{2}[-\/\.]\d{2}[-\/\.]\d{4}\b/
+  ];
+  for (const pattern of duePatterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      const dt = parseDate(match[1] || match[0], 'DD/MM/YYYY') || parseDate(match[1] || match[0], 'DD MMM YYYY') || parseDate(match[1] || match[0], 'YYYY-MM-DD');
+      if (dt) {
+        dueDate = dt;
+        break;
+      }
+    }
+  }
+  
+  const minPatterns = [
+    /(?:minimum\s+amount\s+due|minimum\s+due|min\s+due)\D*?([\d,]+\.\d{2})/i,
+    /(?:minimum\s+due|min\s+due)\D*?([\d,]+)\b/i
+  ];
+  for (const pattern of minPatterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      minDue = parseFloat(match[1].replace(/,/g, ''));
+      break;
+    }
+  }
+  
+  if (outstanding === 0) {
+    const numbers = cleanText.replace(/,/g, '').match(/\b\d{4,6}\.\d{2}\b/g);
+    if (numbers) {
+      outstanding = Math.max(...numbers.map(Number));
+    }
+  }
+  if (limit === 0) limit = 150000;
+  if (minDue === 0 && outstanding > 0) minDue = Math.round(outstanding * 0.05);
+  
+  return { name, outstanding, limit, dueDate, minDue };
+}
+
+function extractNpsBalances(text) {
+  const cleanText = text.replace(/\s+/g, ' ');
+  
+  let pran = '';
+  const pranPatterns = [
+    /pran\s*[:=-]?\s*(\d{12})\b/i,
+    /permanent\s*retirement\s*account\s*number\s*[:=-]?\s*(\d{12})\b/i,
+    /pran\D*?(\d{12})\b/i,
+    /\b(\d{12})\b/
+  ];
+  for (const pattern of pranPatterns) {
+    const match = cleanText.match(pattern);
+    if (match) { pran = match[1]; break; }
+  }
+
+  let tier1 = 0;
+  const t1Patterns = [
+    /tier\s*i\s*(?:account|holding|investment|valuation|portfolio)?\s*(?:value|balance|worth)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*i\s*.*?(?:value|balance|holding)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*1\s*.*?(?:value|balance|holding)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*i\D*?([\d,]+\.\d{2})/i,
+    /tier\s*1\D*?([\d,]+\.\d{2})/i
+  ];
+  for (const pattern of t1Patterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      const val = parseFloat(match[1].replace(/,/g, ''));
+      if (val > 0) { tier1 = val; break; }
+    }
+  }
+
+  let tier2 = 0;
+  const t2Patterns = [
+    /tier\s*ii\s*(?:account|holding|investment|valuation|portfolio)?\s*(?:value|balance|worth)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*ii\s*.*?(?:value|balance|holding)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*2\s*.*?(?:value|balance|holding)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*ii\D*?([\d,]+\.\d{2})/i,
+    /tier\s*2\D*?([\d,]+\.\d{2})/i
+  ];
+  for (const pattern of t2Patterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      const val = parseFloat(match[1].replace(/,/g, ''));
+      if (val > 0) { tier2 = val; break; }
+    }
+  }
+
+  return { pran, tier1, tier2 };
+}
+
+function parseBankStatementPdf(text, bankType) {
+  const lines = text.split('\n');
+  const txns = [];
+  const dateReg = /\b\d{2}[-\/\.]\d{2}[-\/\.]\d{4}\b/g;
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+
+    const dates = line.match(dateReg);
+    if (!dates || dates.length === 0) continue;
+
+    const dateStr = parseDate(dates[0], 'DD/MM/YYYY') || parseDate(dates[0], 'YYYY-MM-DD') || parseDate(dates[0], 'MM/DD/YYYY');
+    if (!dateStr) continue;
+
+    const numMatches = line.match(/[\d,]+\.\d{2}/g);
+    if (!numMatches || numMatches.length === 0) continue;
+
+    let amount = 0;
+    let type = 'debit';
+    let desc = '';
+
+    if (bankType === 'icici-salary') {
+      if (numMatches.length >= 3) {
+        const withdrawal = parseFloat(numMatches[numMatches.length - 3].replace(/,/g, ''));
+        const deposit = parseFloat(numMatches[numMatches.length - 2].replace(/,/g, ''));
+        if (deposit > 0) {
+          amount = deposit;
+          type = 'credit';
+        } else {
+          amount = withdrawal;
+          type = 'debit';
+        }
+      } else {
+        amount = parseFloat(numMatches[0].replace(/,/g, ''));
+        type = /credit|salary|dep|cr|deposit/i.test(line) ? 'credit' : 'debit';
+      }
+
+      const secondDateIdx = dates.length >= 2 ? line.indexOf(dates[1]) + dates[1].length : line.indexOf(dates[0]) + dates[0].length;
+      const firstNumIdx = line.indexOf(numMatches[0]);
+      desc = line.substring(secondDateIdx, firstNumIdx).trim();
+
+    } else if (bankType === 'icici-cc' || bankType === 'sc' || bankType === 'amex') {
+      amount = parseFloat(numMatches[0].replace(/,/g, ''));
+      type = /payment|refund|cr/i.test(line.toLowerCase()) ? 'credit' : 'debit';
+
+      const dateIdx = line.indexOf(dates[0]) + dates[0].length;
+      const numIdx = line.indexOf(numMatches[0]);
+      desc = line.substring(dateIdx, numIdx).trim();
+    }
+
+    desc = desc.replace(/^[-\s,]+/, '').replace(/[-\s,]+$/, '');
+    if (!desc) desc = "Transaction Remarks";
+
+    if (amount > 0) {
+      txns.push({
+        date: dateStr,
+        desc: desc,
+        amount: amount,
+        type: type,
+        cat: autoCategory(desc, amount)
+      });
+    }
+  }
+  return txns;
+}
 
 const BANK_CONFIGS = {
   'icici-salary': {
@@ -3726,61 +4036,122 @@ function selectBank(bank, btn) {
   parsedRows = [];
 }
 
+async function processPdfParsing(file, pwd) {
+  try {
+    const pdfjs = await ensurePdfJS();
+    const arrayBuffer = await file.arrayBuffer();
+    
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer), password: pwd });
+    const pdf = await loadingTask.promise;
+    
+    let textAll = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      textAll += (reconstructTextWithCoordinates(textContent) || textContent.items.map(s => s.str).join(' ')) + '\n';
+    }
+    
+    pendingPdfFile = null;
+    
+    const importBtn = document.getElementById('importConfirmBtn');
+    if (importBtn) importBtn.style.display = 'inline-block';
+    
+    if (selectedBank === 'nps') {
+      const { pran, tier1, tier2 } = extractNpsBalances(textAll);
+      parsedRows = [{ pran, tier1, tier2 }];
+      
+      document.getElementById('parse-result').style.display = 'block';
+      document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ NPS Data Extracted from PDF</span>`;
+      document.getElementById('parse-preview-table').innerHTML = 
+        `<div class="parse-row"><div class="parse-cell parse-header val">PRAN</div><div class="parse-cell val">${esc(pran || 'Not found')}</div></div>` +
+        `<div class="parse-row"><div class="parse-cell parse-header val">Tier I Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier1||0).toLocaleString('en-IN')}</div></div>` +
+        `<div class="parse-row"><div class="parse-cell parse-header val">Tier II Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier2||0).toLocaleString('en-IN')}</div></div>`;
+      document.getElementById('parse-summary').textContent = `File: ${file.name} (PDF)`;
+      
+    } else {
+      const txns = parseBankStatementPdf(textAll, selectedBank);
+      parsedRows = txns;
+      
+      const isCreditCard = selectedBank === 'icici-cc' || selectedBank === 'amex' || (selectedBank === 'sc' && textAll.toLowerCase().includes('credit card'));
+      if (isCreditCard) {
+        detectedCardData = extractCardMetadata(textAll, selectedBank);
+      } else {
+        detectedCardData = null;
+      }
+      
+      const resultEl = document.getElementById('parse-result');
+      resultEl.style.display = 'block';
+      const statusEl = document.getElementById('parse-status-badge');
+      
+      if (parsedRows.length > 0) {
+        let badgeHtml = `<span class="parse-status parse-ok">✓ ${parsedRows.length} transactions extracted from PDF</span>`;
+        if (detectedCardData) {
+          badgeHtml += ` <span class="parse-status parse-ok" style="background:rgba(123,94,167,0.1);color:#7b5ea7">💳 Detected ${esc(detectedCardData.name)}</span>`;
+        }
+        statusEl.innerHTML = badgeHtml;
+        const previewRows = parsedRows.slice(0, 8);
+        document.getElementById('parse-preview-table').innerHTML = 
+          `<div class="parse-row"><div class="parse-cell parse-header val">Date</div><div class="parse-cell parse-header val">Description</div><div class="parse-cell parse-header val">Amount</div><div class="parse-cell parse-header val">Type</div><div class="parse-cell parse-header val">Category</div></div>` +
+          previewRows.map(t =>
+            `<div class="parse-row"><div class="parse-cell val">${t.date}</div><div class="parse-cell val">${esc(t.desc)}</div><div class="parse-cell val" style="color:var(--accent)">₹${t.amount.toLocaleString('en-IN')}</div><div class="parse-cell val" style="color:${t.type==='debit'?'var(--red)':'var(--green)'}">${t.type}</div><div class="parse-cell val">${t.cat}</div></div>`
+          ).join('');
+      } else {
+        const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const sampleText = textAll.substring(0, 300);
+        statusEl.innerHTML = `<span class="parse-status" style="background:var(--red-light);color:var(--red);white-space:normal;display:block;padding:8px">✗ No transactions extracted. Check bank/card format matches statement.<br><br>Extracted Sample:<br>${escapeHtml(sampleText)}</span>`;
+        document.getElementById('parse-preview-table').innerHTML = '';
+      }
+      
+      document.getElementById('parse-summary').textContent = `File: ${file.name} (PDF) · ${parsedRows.length} valid rows`;
+    }
+  } catch (err) {
+    if (err.name === 'PasswordException') {
+      pendingPdfFile = file;
+      
+      document.getElementById('parse-result').style.display = 'block';
+      document.getElementById('parse-status-badge').innerHTML = 
+        `<span class="parse-status" style="background:var(--red-light);color:var(--red)">🔒 Password Protected</span>`;
+      document.getElementById('parse-preview-table').innerHTML = `
+        <div style="padding:16px;background:var(--surface2);border-radius:6px;border:1px dashed var(--red);text-align:center">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--text)">⚠️ Password Required for ${esc(file.name)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:12px">${pwd ? 'Incorrect password. ' : ''}This statement is encrypted. Enter the correct password below to parse it:</div>
+          <div style="display:flex;gap:8px;justify-content:center;max-width:320px;margin:0 auto">
+            <input class="form-input" type="password" id="inline-pdf-password" placeholder="Enter PDF Password" style="font-size:12px;padding:6px 10px;height:auto">
+            <button class="btn btn-primary btn-sm" onclick="retryPdfUnlock()" style="white-space:nowrap;padding:6px 12px">Unlock & Parse</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('parse-summary').textContent = `File: ${file.name} is encrypted.`;
+      document.getElementById('importConfirmBtn').style.display = 'none';
+      
+      setTimeout(() => {
+        const inlineInput = document.getElementById('inline-pdf-password');
+        if (inlineInput) inlineInput.focus();
+      }, 100);
+    } else {
+      alert("Error parsing PDF: " + err.message);
+      pendingPdfFile = null;
+    }
+  }
+}
+
+async function retryPdfUnlock() {
+  if (!pendingPdfFile) return;
+  const inlinePwdInput = document.getElementById('inline-pdf-password');
+  const pwd = inlinePwdInput ? inlinePwdInput.value : '';
+  await processPdfParsing(pendingPdfFile, pwd);
+}
+
 async function parseCSV(event) {
   const file = event.target.files[0];
   if (!file) return;
   const cfg = BANK_CONFIGS[selectedBank];
 
   if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-    try {
-      const pwd = document.getElementById('import-pdf-password') ? document.getElementById('import-pdf-password').value : '';
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer, password: pwd }).promise;
-      let textAll = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        textAll += textContent.items.map(s => s.str).join(' ') + '\n';
-      }
-      textAll = textAll.toLowerCase();
-      if (selectedBank === 'nps') {
-        let pran = '', tier1 = 0, tier2 = 0;
-        const pranMatch = textAll.match(/pran.*?\b(\d{12})\b/i) || textAll.match(/\b(\d{12})\b/);
-        if (pranMatch) pran = pranMatch[1];
-        const t1Match = textAll.match(/tier\s*i\s*.*?balance.*?([\d,]+(\.\d{1,2})?)/i) 
-                     || textAll.match(/tier\s*i.*?holding.*?([\d,]+(\.\d{1,2})?)/i)
-                     || textAll.match(/tier\s*i.*?value.*?([\d,]+(\.\d{1,2})?)/i)
-                     || textAll.match(/tier\s*1.*?([\d,]+(\.\d{1,2})?)/i);
-        if (t1Match) tier1 = parseFloat(t1Match[1].replace(/,/g, ''));
-        const t2Match = textAll.match(/tier\s*ii\s*.*?balance.*?([\d,]+(\.\d{1,2})?)/i) 
-                     || textAll.match(/tier\s*ii.*?holding.*?([\d,]+(\.\d{1,2})?)/i)
-                     || textAll.match(/tier\s*ii.*?value.*?([\d,]+(\.\d{1,2})?)/i)
-                     || textAll.match(/tier\s*2.*?([\d,]+(\.\d{1,2})?)/i);
-        if (t2Match) tier2 = parseFloat(t2Match[1].replace(/,/g, ''));
-        
-        parsedRows = [{ pran, tier1: tier1||0, tier2: tier2||0 }];
-        document.getElementById('parse-result').style.display = 'block';
-        document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ NPS Data Extracted from PDF</span>`;
-        document.getElementById('parse-preview-table').innerHTML = `<div class="parse-row"><div class="parse-cell parse-header val">PRAN</div><div class="parse-cell val">${esc(pran || 'Not found')}</div></div>` +
-                          `<div class="parse-row"><div class="parse-cell parse-header val">Tier I Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier1||0).toLocaleString('en-IN')}</div></div>` +
-                          `<div class="parse-row"><div class="parse-cell parse-header val">Tier II Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier2||0).toLocaleString('en-IN')}</div></div>`;
-        document.getElementById('parse-summary').textContent = `File: ${file.name} (PDF)`;
-        event.target.value = '';
-        return;
-      } else {
-        alert("PDF parsing is only supported for NPS statements currently.");
-        event.target.value = '';
-        return;
-      }
-    } catch(err) {
-      if (err.name === 'PasswordException') {
-        alert("This PDF is password protected! Please enter the password in the box above.");
-      } else {
-        alert("Error parsing PDF: " + err.message);
-      }
-      event.target.value = '';
-      return;
-    }
+    const pwd = document.getElementById('import-pdf-password') ? document.getElementById('import-pdf-password').value : '';
+    await processPdfParsing(file, pwd);
+    event.target.value = '';
+    return;
   }
 
   const reader = new FileReader();
@@ -3903,6 +4274,29 @@ function confirmImport() {
 
   // EMIs are now auto-populated continuously via syncLoansFromTxns() in renderAll()
   
+  if (detectedCardData) {
+    const m = currentMember === 'all' ? 'madhu' : currentMember;
+    let existingCard = D.cards.find(c => c.member === m && c.name.toLowerCase().includes(detectedCardData.name.toLowerCase()));
+    if (existingCard) {
+      existingCard.outstanding = detectedCardData.outstanding;
+      if (detectedCardData.limit > 0) existingCard.limit = detectedCardData.limit;
+      if (detectedCardData.dueDate) existingCard.dueDate = detectedCardData.dueDate;
+      if (detectedCardData.minDue > 0) existingCard.minDue = detectedCardData.minDue;
+    } else {
+      const newCard = {
+        id: Date.now() + Math.random(),
+        name: detectedCardData.name,
+        member: m,
+        outstanding: detectedCardData.outstanding,
+        limit: detectedCardData.limit || 150000,
+        dueDate: detectedCardData.dueDate || '',
+        minDue: detectedCardData.minDue || 0
+      };
+      D.cards.push(newCard);
+    }
+    detectedCardData = null; // Clear state
+  }
+
   save(); renderAll();
   let msg = `✓ Imported ${added} txns`;
   msg += ` · ${dupes} duplicates skipped`;
