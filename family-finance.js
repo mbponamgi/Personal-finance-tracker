@@ -66,9 +66,25 @@ function save() {
 // ─────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────
-const fmt = n => '₹' + Math.abs(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
-const cr = n => '₹' + (Math.abs(n||0)/1e7).toFixed(2) + ' Cr';
-const lk = n => '₹' + (Math.abs(n||0)/1e5).toFixed(1) + ' L';
+let numbersHidden = localStorage.getItem('numbers_hidden') !== 'false';
+
+function toggleHideNumbers() {
+  numbersHidden = !numbersHidden;
+  localStorage.setItem('numbers_hidden', numbersHidden ? 'true' : 'false');
+  updateHideNumbersButton();
+  renderAll();
+}
+
+function updateHideNumbersButton() {
+  const btn = document.getElementById('toggleHideNumbersBtn');
+  if (btn) {
+    btn.innerHTML = numbersHidden ? '👁 Show Balances' : '🙈 Hide Balances';
+  }
+}
+
+const fmt = n => numbersHidden ? '₹ ••••' : '₹' + Math.abs(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+const cr = n => numbersHidden ? '₹ •• Cr' : '₹' + (Math.abs(n||0)/1e7).toFixed(2) + ' Cr';
+const lk = n => numbersHidden ? '₹ •• L' : '₹' + (Math.abs(n||0)/1e5).toFixed(1) + ' L';
 const todayStr = () => new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 const pf = (v, max) => Math.min(Math.round((v/max)*100), 100);
 
@@ -856,10 +872,10 @@ function renderCards() {
 // ─────────────────────────────────────────────
 function renderRewards() {
   const a = D.rewards['amex'], ic = D.rewards['icici-cc'];
-  document.getElementById('rw-amex-pts').textContent = a.points.toLocaleString('en-IN');
-  document.getElementById('rw-icici-pts').textContent = ic.points.toLocaleString('en-IN');
-  document.getElementById('rw-amex-big').textContent = a.points.toLocaleString('en-IN');
-  document.getElementById('rw-icici-big').textContent = ic.points.toLocaleString('en-IN');
+  document.getElementById('rw-amex-pts').textContent = numbersHidden ? '••••' : a.points.toLocaleString('en-IN');
+  document.getElementById('rw-icici-pts').textContent = numbersHidden ? '••••' : ic.points.toLocaleString('en-IN');
+  document.getElementById('rw-amex-big').textContent = numbersHidden ? '••••' : a.points.toLocaleString('en-IN');
+  document.getElementById('rw-icici-big').textContent = numbersHidden ? '••••' : ic.points.toLocaleString('en-IN');
   const av = a.points * a.rate, iv = ic.points * ic.rate;
   document.getElementById('rw-total-val').textContent = fmt(av+iv);
   document.getElementById('rw-amex-val').textContent = '≈ '+fmt(av)+' value';
@@ -970,7 +986,7 @@ function renderGold() {
   const totalCost = list.reduce((s,g)=>s+g.cost,0);
   const totalGain = totalVal - totalCost;
   document.getElementById('gold-total-val').textContent = fmt(totalVal);
-  document.getElementById('gold-total-wt').textContent = totalWt.toFixed(1) + ' g';
+  document.getElementById('gold-total-wt').textContent = numbersHidden ? '•••• g' : totalWt.toFixed(1) + ' g';
   document.getElementById('gold-total-gain').textContent = (totalGain>=0?'+':'−') + fmt(Math.abs(totalGain));
   document.getElementById('gold-total-gain').className = 'card-value ' + (totalGain >= 0 ? 'positive' : 'negative');
 
@@ -986,7 +1002,7 @@ function renderGold() {
           <div class="row-icon" style="background:var(--accent-light);color:var(--accent)">◎</div>
           <div>
             <div class="row-name">${g.name} ${memberTag(g.member)}</div>
-            <div class="row-sub">${g.weight}g · ${g.purity}K · ${g.form}</div>
+            <div class="row-sub">${numbersHidden ? '••' : g.weight}g · ${g.purity}K · ${g.form}</div>
           </div>
         </div>
         <div style="text-align:right">
@@ -1627,4 +1643,5 @@ function confirmImport() {
 load();
 document.getElementById('m-txn-date').value = new Date().toISOString().split('T')[0];
 selectBank('icici-salary', document.querySelector('.bank-tab'));
+updateHideNumbersButton();
 renderAll();
