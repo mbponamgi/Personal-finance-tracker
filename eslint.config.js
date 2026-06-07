@@ -36,6 +36,7 @@ export default [
         BANK_CONFIGS: "readonly",
         MEMBER_NAMES: "readonly",
         KEY: "readonly",
+        Chart: "readonly",
       },
     },
     rules: {
@@ -49,6 +50,8 @@ export default [
       "eqeqeq": ["error", "always"],
       "no-var": "error",
       "prefer-const": "warn",
+      "no-redeclare": ["error", { "builtinGlobals": false }],
+      "no-empty": ["error", { "allowEmptyCatch": true }],
       // Code quality
       "no-console": "warn",
       "no-duplicate-case": "error",

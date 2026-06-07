@@ -9,6 +9,11 @@ const MEMBER_COLORS = {madhu:'#b5813a',sailaja:'#4a7c6f',parents:'#7b5ea7',chara
 
 let currentMember = 'all';
 
+let nwChartInstance = null;
+let assetChartInstance = null;
+let budgetChartInstance = null;
+let taxChartInstance = null;
+
 let D = {
   accounts: [],
   cards: [],
@@ -626,10 +631,25 @@ function calcGoldValue() {
 
 function snapshotNW() {
   const nw = calcNW();
+  const accs = filterByMember(D.accounts);
+  const liq = accs.reduce((s, a) => s + a.balance, 0);
+  const props = filterByMember(D.properties);
+  const propVal = props.reduce((s, p) => s + p.value, 0);
+  const invs = filterByMember(D.investments);
+  const inv = invs.reduce((s, i) => s + i.value, 0);
+  const goldVal = filterByMember(D.gold).reduce((s, g) => s + g.weight * ((g.purity||22)/24) * (D.goldRate||7500), 0);
+  const npsData = getNpsData();
+  const npsTotal = npsData.tier1 + npsData.tier2;
+  const assetsVal = liq + propVal + inv + goldVal + D.epf.balance + npsTotal;
+  const loanLiab = filterByMember(D.loans).reduce((s, l) => s + l.outstanding, 0);
+  const cardLiab = filterByMember(D.cards).reduce((s, c) => s + c.outstanding, 0);
+  const liabsVal = loanLiab + cardLiab;
+
   const month = new Date().toLocaleDateString('en-IN',{month:'short',year:'2-digit'});
   const i = D.nwHistory.findIndex(h => h.m === month);
-  if (i >= 0) D.nwHistory[i].v = nw;
-  else D.nwHistory.push({m: month, v: nw});
+  const entry = { m: month, v: nw, assets: assetsVal, liabs: liabsVal };
+  if (i >= 0) D.nwHistory[i] = entry;
+  else D.nwHistory.push(entry);
   if (D.nwHistory.length > 12) D.nwHistory.shift();
 }
 
@@ -692,7 +712,9 @@ function renderOv() {
   const loanLiab = loans.reduce((s, l) => s + l.outstanding, 0);
   const cardLiab = cards.reduce((s, c) => s + c.outstanding, 0);
   const totalLiab = loanLiab + cardLiab;
-  const nw = liq + propVal + inv + goldVal + D.epf.balance + D.nps.tier1 + D.nps.tier2 - totalLiab;
+  const npsData = getNpsData();
+  const npsTotal = npsData.tier1 + npsData.tier2;
+  const nw = liq + propVal + inv + goldVal + D.epf.balance + npsTotal - totalLiab;
 
   document.getElementById('ov-nw').textContent = fmt(nw);
   document.getElementById('ov-liquid').textContent = fmt(liq);
@@ -713,27 +735,7 @@ function renderOv() {
   }
 
   // Asset breakdown
-  const totalAssets = liq + propVal + inv + goldVal + D.epf.balance + D.nps.tier1 + D.nps.tier2;
-  const assetEl = document.getElementById('ov-assets-breakdown');
-  if (totalAssets === 0) {
-    assetEl.innerHTML = '<div class="empty-state"><div class="empty-icon">◈</div>Add assets to see breakdown</div>';
-  } else {
-    const segments = [
-      {label:'Liquid', val:liq, color:'var(--accent2)'},
-      {label:'Property', val:propVal, color:'#4a6fa5'},
-      {label:'Investments', val:inv, color:'var(--accent3)'},
-      {label:'Gold', val:goldVal, color:'var(--accent)'},
-      {label:'EPF/NPS', val:D.epf.balance+D.nps.tier1+D.nps.tier2, color:'var(--green)'},
-    ].filter(s => s.val > 0);
-    assetEl.innerHTML = segments.map(s => {
-      const pct = (s.val / totalAssets * 100).toFixed(1);
-      return `<div class="spend-row">
-        <div class="spend-label">${s.label}</div>
-        <div class="spend-bar-wrap"><div class="spend-bar-fill" style="width:${pct}%;background:${s.color}"></div></div>
-        <div class="spend-val">${lk(s.val)}</div>
-      </div>`;
-    }).join('');
-  }
+  renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal);
 
   // Loans mini
   const loanEl = document.getElementById('ov-loans-mini');
@@ -837,22 +839,280 @@ function renderSpend() {
 }
 
 function renderNWChart() {
-  const hist = D.nwHistory;
-  if (hist.length < 2) return;
-  const vals = hist.map(h => h.v);
-  const min = Math.min(...vals) * .95, max = Math.max(...vals) * 1.05 || 1;
-  const W = 400, H = 100;
-  const pts = vals.map((v,i) => [(i/(vals.length-1))*W, H - ((v-min)/(max-min))*H]);
-  const line = pts.map((p,i) => (i?'L':'M')+p[0]+','+p[1]).join(' ');
-  document.getElementById('nwLine').setAttribute('d', line);
-  document.getElementById('nwFill').setAttribute('d', line + ` L${pts[pts.length-1][0]},${H} L0,${H} Z`);
-  document.getElementById('nwDots').innerHTML = pts.map(p =>
-    `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="#b5813a" stroke="#fff" stroke-width="1.5"/>`
-  ).join('');
-  document.getElementById('nwLabels').innerHTML = hist.map(h =>
-    `<span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted)">${h.m}</span>`
-  ).join('');
+  const canvas = document.getElementById('nwChartCanvas');
+  if (!canvas) return;
+  
+  let hist = D.nwHistory || [];
+  if (hist.length === 0) return;
+  
+  // Filter by range select
+  const rangeSelect = document.getElementById('nw-chart-range');
+  const range = rangeSelect ? rangeSelect.value : '12';
+  if (range !== 'all') {
+    const num = parseInt(range, 10);
+    hist = hist.slice(-num);
+  }
+  
+  const labels = hist.map(h => h.m);
+  const nwData = hist.map(h => h.v);
+  const assetData = hist.map(h => h.assets !== undefined ? h.assets : h.v);
+  const liabData = hist.map(h => h.liabs !== undefined ? h.liabs : 0);
+  
+  // Destroy existing chart if it exists
+  if (nwChartInstance) {
+    nwChartInstance.destroy();
+  }
+  
+  const ctx = canvas.getContext('2d');
+  
+  // Create gradient background for Net Worth line
+  const gradient = ctx.createLinearGradient(0, 0, 0, 120);
+  gradient.addColorStop(0, 'rgba(181, 129, 58, 0.2)');
+  gradient.addColorStop(1, 'rgba(181, 129, 58, 0.0)');
+  
+  nwChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Net Worth',
+          data: nwData,
+          borderColor: '#b5813a',
+          backgroundColor: gradient,
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3.5,
+          pointBackgroundColor: '#b5813a',
+          pointBorderColor: '#fff',
+          pointHoverRadius: 5.5,
+          pointHoverBackgroundColor: '#b5813a',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 1.5,
+          order: 1
+        },
+        {
+          label: 'Total Assets',
+          data: assetData,
+          borderColor: 'rgba(58, 125, 84, 0.65)',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          fill: false,
+          tension: 0.35,
+          pointRadius: 2.5,
+          pointBackgroundColor: '#3a7d54',
+          pointBorderColor: '#fff',
+          order: 2
+        },
+        {
+          label: 'Total Liabilities',
+          data: liabData,
+          borderColor: 'rgba(192, 57, 43, 0.65)',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          fill: false,
+          tension: 0.35,
+          pointRadius: 2.5,
+          pointBackgroundColor: '#c0392b',
+          pointBorderColor: '#fff',
+          order: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'end',
+          labels: {
+            boxWidth: 12,
+            boxHeight: 2,
+            padding: 8,
+            font: {
+              family: "'DM Sans', sans-serif",
+              size: 9,
+              weight: '500'
+            },
+            color: 'var(--muted)'
+          }
+        },
+        tooltip: {
+          backgroundColor: 'var(--surface)',
+          titleColor: 'var(--text)',
+          bodyColor: 'var(--text2)',
+          borderColor: 'var(--border)',
+          borderWidth: 1,
+          padding: 8,
+          titleFont: {
+            family: "'DM Sans', sans-serif",
+            size: 10,
+            weight: '600'
+          },
+          bodyFont: {
+            family: "'DM Mono', monospace",
+            size: 10
+          },
+          callbacks: {
+            label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) {
+                label += ': ';
+              }
+              if (context.parsed.y !== null) {
+                label += numbersHidden ? '₹ ••••' : '₹' + Math.abs(context.parsed.y).toLocaleString('en-IN');
+              }
+              return label;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false
+          },
+          ticks: {
+            color: 'var(--muted)',
+            font: {
+              family: "'DM Mono', monospace",
+              size: 8.5
+            }
+          }
+        },
+        y: {
+          grid: {
+            color: 'rgba(200, 192, 182, 0.25)',
+            lineWidth: 0.75
+          },
+          ticks: {
+            color: 'var(--muted)',
+            font: {
+              family: "'DM Mono', monospace",
+              size: 8.5
+            },
+            callback: function(value) {
+              if (numbersHidden) return '••';
+              if (value >= 1e7) return '₹' + (value/1e7).toFixed(1) + 'Cr';
+              if (value >= 1e5) return '₹' + (value/1e5).toFixed(0) + 'L';
+              return '₹' + value.toLocaleString('en-IN');
+            }
+          }
+        }
+      }
+    }
+  });
 }
+
+function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
+  const totalAssets = liq + propVal + inv + goldVal + D.epf.balance + npsTotal;
+  const assetEl = document.getElementById('ov-assets-breakdown');
+  const canvas = document.getElementById('assetDoughnutCanvas');
+  
+  if (totalAssets === 0) {
+    if (assetEl) assetEl.innerHTML = '<div class="empty-state"><div class="empty-icon">◈</div>Add assets to see breakdown</div>';
+    if (canvas) canvas.style.display = 'none';
+    return;
+  }
+  
+  if (canvas) canvas.style.display = 'block';
+  
+  if (assetChartInstance) {
+    assetChartInstance.destroy();
+  }
+  
+  const ctx = canvas.getContext('2d');
+  
+  const epfNps = D.epf.balance + npsTotal;
+  const innerGroups = [liq + inv + goldVal, propVal, epfNps];
+  const outerClasses = [liq, inv, goldVal, propVal, epfNps];
+  
+  assetChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Liquid Cash', 'Investments', 'Gold', 'Property', 'EPF & NPS'],
+      datasets: [
+        {
+          data: innerGroups,
+          backgroundColor: [
+            'rgba(74, 124, 111, 0.6)',
+            'rgba(74, 111, 165, 0.6)',
+            'rgba(58, 125, 84, 0.6)'
+          ],
+          borderWidth: 1.5,
+          borderColor: 'var(--surface)',
+          weight: 0.6,
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const labels = ['Liquid/Investments/Gold', 'Real Estate / Property', 'Retirement (EPF/NPS)'];
+                return labels[context.dataIndex] + ': ' + (numbersHidden ? '₹ ••••' : '₹' + context.raw.toLocaleString('en-IN'));
+              }
+            }
+          }
+        },
+        {
+          data: outerClasses,
+          backgroundColor: [
+            'var(--accent2)',
+            'var(--accent3)',
+            'var(--accent)',
+            '#4a6fa5',
+            'var(--green)'
+          ],
+          borderWidth: 1.5,
+          borderColor: 'var(--surface)',
+          weight: 1.0,
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return context.label + ': ' + (numbersHidden ? '₹ ••••' : '₹' + context.raw.toLocaleString('en-IN'));
+              }
+            }
+          }
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '45%',
+      plugins: {
+        legend: {
+          display: false
+        }
+      }
+    }
+  });
+  
+  const segments = [
+    {label:'Liquid Cash', val:liq, color:'var(--accent2)'},
+    {label:'Investments', val:inv, color:'var(--accent3)'},
+    {label:'Gold', val:goldVal, color:'var(--accent)'},
+    {label:'Property', val:propVal, color:'#4a6fa5'},
+    {label:'EPF/NPS', val:epfNps, color:'var(--green)'},
+  ].filter(s => s.val > 0);
+  
+  assetEl.innerHTML = segments.map(s => {
+    const pct = (s.val / totalAssets * 100).toFixed(1);
+    return `<div class="spend-row" style="margin-bottom:6px; font-size:11px;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="width:7px;height:7px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+        <span class="spend-label" style="font-weight:500;">${s.label}</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <span style="color:var(--muted);font-size:10px;">${pct}%</span>
+        <span class="spend-val" style="font-family:'DM Mono',monospace;font-weight:500;">${lk(s.val)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 
 function renderAlerts() {
   const alerts = [];
@@ -1172,8 +1432,17 @@ function renderEPF() {
 // ─────────────────────────────────────────────
 // NPS
 // ─────────────────────────────────────────────
+function getNpsData() {
+  if (currentMember === 'all') {
+    let t1=0, t2=0, fyc=0, mo=0;
+    Object.values(D.nps).forEach(n => { t1+=(n.tier1||0); t2+=(n.tier2||0); fyc+=(n.fyContrib||0); mo+=(n.monthly||0); });
+    return { pran:Object.keys(D.nps).length > 1 ? 'Multiple' : (Object.values(D.nps)[0]?.pran || ''), tier1:t1, tier2:t2, fyContrib:fyc, monthly:mo, equityPct:'-' };
+  }
+  return D.nps[currentMember] || {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
+}
+
 function renderNPS() {
-  const n = D.nps, tot = n.tier1 + n.tier2;
+  const n = getNpsData(), tot = n.tier1 + n.tier2;
   document.getElementById('nps-bal-d').textContent = fmt(tot);
   document.getElementById('nps-sip-d').textContent = fmt(n.monthly);
   document.getElementById('nps-tax-d').textContent = fmt(Math.min(n.fyContrib,50000)*.312);
@@ -1181,7 +1450,7 @@ function renderNPS() {
   document.getElementById('nps-t1-d').textContent = fmt(n.tier1);
   document.getElementById('nps-t2-d').textContent = fmt(n.tier2);
   document.getElementById('nps-contrib-d').textContent = fmt(n.fyContrib);
-  document.getElementById('nps-eq-d').textContent = (n.equityPct||75) + '%';
+  document.getElementById('nps-eq-d').textContent = n.equityPct === '-' ? '-' : (n.equityPct||75) + '%';
   const pct = pf(n.fyContrib, 50000);
   document.getElementById('nps-80ccd-pct').textContent = pct + '%';
   document.getElementById('nps-80ccd-bar').style.width = pct + '%';
@@ -1349,6 +1618,107 @@ function renderBudget() {
   document.getElementById('bud-remaining').className = 'card-value ' + (remaining >= 0 ? 'positive' : 'negative');
   document.getElementById('bud-pct').textContent = totalBudget ? Math.round(totalActual/totalBudget*100)+'%' : '0%';
 
+  // Budget Comparison Chart
+  const budgetCanvas = document.getElementById('budgetChartCanvas');
+  if (budgetCanvas) {
+    const cats = Object.keys(D.budgets);
+    const activeCats = cats.filter(cat => D.budgets[cat] > 0 || curSpend[cat] > 0);
+    
+    if (budgetChartInstance) {
+      budgetChartInstance.destroy();
+    }
+    
+    if (activeCats.length === 0) {
+      const ctx = budgetCanvas.getContext('2d');
+      ctx.clearRect(0, 0, budgetCanvas.width, budgetCanvas.height);
+    } else {
+      const budgetData = activeCats.map(cat => D.budgets[cat] || 0);
+      const actualData = activeCats.map(cat => curSpend[cat] || 0);
+      const spendColors = activeCats.map(cat => {
+        const b = D.budgets[cat] || 0;
+        const s = curSpend[cat] || 0;
+        if (b > 0 && s > b) return 'rgba(192, 57, 43, 0.8)';
+        if (b > 0 && s > b * 0.75) return 'rgba(192, 105, 43, 0.8)';
+        return 'rgba(58, 125, 84, 0.8)';
+      });
+      const ctx = budgetCanvas.getContext('2d');
+      budgetChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: activeCats,
+          datasets: [
+            {
+              label: 'Budget Limit',
+              data: budgetData,
+              backgroundColor: 'rgba(138, 130, 121, 0.3)',
+              borderColor: 'rgba(138, 130, 121, 0.45)',
+              borderWidth: 1,
+              borderRadius: 4
+            },
+            {
+              label: 'Actual Spent',
+              data: actualData,
+              backgroundColor: spendColors,
+              borderColor: spendColors.map(c => c.replace('0.8', '1.0')),
+              borderWidth: 1,
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                boxWidth: 12,
+                boxHeight: 12,
+                font: { family: "'DM Sans', sans-serif", size: 10 },
+                color: 'var(--muted)'
+              }
+            },
+            tooltip: {
+              backgroundColor: 'var(--surface)',
+              titleColor: 'var(--text)',
+              bodyColor: 'var(--text2)',
+              borderColor: 'var(--border)',
+              borderWidth: 1,
+              titleFont: { family: "'DM Sans', sans-serif", size: 10, weight: '600' },
+              bodyFont: { family: "'DM Mono', monospace", size: 10 },
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) label += ': ';
+                  label += numbersHidden ? '₹ ••••' : '₹' + context.raw.toLocaleString('en-IN');
+                  return label;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: 'var(--muted)', font: { family: "'DM Sans', sans-serif", size: 9 } }
+            },
+            y: {
+              grid: { color: 'rgba(200, 192, 182, 0.25)', lineWidth: 0.75 },
+              ticks: {
+                color: 'var(--muted)',
+                font: { family: "'DM Mono', monospace", size: 9 },
+                callback: function(value) {
+                  if (numbersHidden) return '••';
+                  return '₹' + value.toLocaleString('en-IN');
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
   // Budget bars
   const barsEl = document.getElementById('budget-bars');
   const cats = Object.keys(D.budgets);
@@ -1446,6 +1816,105 @@ function renderTax() {
       vEl.className = 'alert alert-warn';
       vEl.innerHTML = `<span>⚡</span><span>New Regime is ${fmt(Math.abs(saving))} cheaper. Consider switching.</span>`;
       rEl.innerHTML = '';
+    }
+  }
+
+  // Tax Comparison Chart
+  const taxCanvas = document.getElementById('taxChartCanvas');
+  if (taxCanvas) {
+    if (taxChartInstance) {
+      taxChartInstance.destroy();
+    }
+    
+    if (t.gross === 0) {
+      const ctx = taxCanvas.getContext('2d');
+      ctx.clearRect(0, 0, taxCanvas.width, taxCanvas.height);
+    } else {
+      const ntTaxable = Math.max(0, t.gross - 75000);
+      const ctx = taxCanvas.getContext('2d');
+      taxChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Old Regime', 'New Regime'],
+          datasets: [
+            {
+              label: 'Deductions',
+              data: [totalDed, 75000],
+              backgroundColor: 'rgba(58, 125, 84, 0.75)',
+              borderColor: 'rgba(58, 125, 84, 0.95)',
+              borderWidth: 1,
+              borderRadius: 4
+            },
+            {
+              label: 'Taxable Income',
+              data: [taxable, ntTaxable],
+              backgroundColor: 'rgba(74, 111, 165, 0.75)',
+              borderColor: 'rgba(74, 111, 165, 0.95)',
+              borderWidth: 1,
+              borderRadius: 4
+            },
+            {
+              label: 'Est. Tax Payable',
+              data: [ot, nt],
+              backgroundColor: 'rgba(192, 57, 43, 0.75)',
+              borderColor: 'rgba(192, 57, 43, 0.95)',
+              borderWidth: 1,
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: 'var(--muted)', font: { family: "'DM Sans', sans-serif", size: 10 } }
+            },
+            y: {
+              grid: { color: 'rgba(200, 192, 182, 0.25)', lineWidth: 0.75 },
+              ticks: {
+                color: 'var(--muted)',
+                font: { family: "'DM Mono', monospace", size: 9 },
+                callback: function(value) {
+                  if (numbersHidden) return '••';
+                  if (value >= 1e5) return '₹' + (value/1e5).toFixed(1) + 'L';
+                  return '₹' + value.toLocaleString('en-IN');
+                }
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                boxWidth: 10,
+                boxHeight: 10,
+                font: { family: "'DM Sans', sans-serif", size: 9 },
+                color: 'var(--muted)'
+              }
+            },
+            tooltip: {
+              backgroundColor: 'var(--surface)',
+              titleColor: 'var(--text)',
+              bodyColor: 'var(--text2)',
+              borderColor: 'var(--border)',
+              borderWidth: 1,
+              titleFont: { family: "'DM Sans', sans-serif", size: 10, weight: '600' },
+              bodyFont: { family: "'DM Mono', monospace", size: 10 },
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) label += ': ';
+                  label += numbersHidden ? '₹ ••••' : '₹' + context.raw.toLocaleString('en-IN');
+                  return label;
+                }
+              }
+            }
+          }
+        }
+      });
     }
   }
 }
