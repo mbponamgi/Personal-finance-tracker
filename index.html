@@ -372,6 +372,169 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
 
 /* SECTION DIVIDER */
 .section-head{font-family:'Lora',serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:12px;margin-top:4px;}
+
+/* ── FINANCIAL CALENDAR ── */
+.btn-cal-nav {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.btn-cal-nav:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+.calendar-day-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 8.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.calendar-day-cell {
+  aspect-ratio: 1.2;
+  border-radius: 6px;
+  background: var(--surface2);
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+}
+.calendar-day-cell:hover {
+  border-color: var(--border2);
+  background: var(--surface);
+}
+.calendar-day-cell.other-month {
+  opacity: 0.35;
+  cursor: default;
+}
+.calendar-day-cell.selected {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 1.5px var(--accent-light);
+}
+.calendar-day-cell.today {
+  font-weight: bold;
+}
+.calendar-day-cell.today .day-number {
+  background: var(--text);
+  color: var(--surface);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.day-number {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  text-align: left;
+}
+.calendar-day-cell.today .day-number {
+  text-align: center;
+}
+.calendar-events-dots {
+  display: flex;
+  gap: 2.5px;
+  justify-content: center;
+  margin-top: auto;
+  min-height: 5px;
+}
+.cal-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.cal-dot.emi { background: var(--accent); }
+.cal-dot.ins { background: var(--green); }
+.cal-dot.sub { background: var(--orange); }
+
+.calendar-day-cell.low-balance-warning {
+  background: var(--red-light) !important;
+  border-color: rgba(192, 57, 43, 0.3) !important;
+}
+
+.calendar-day-cell.low-balance-warning .day-number {
+  color: var(--red);
+  font-weight: 600;
+}
+
+/* Timeline/Details items */
+.timeline-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: var(--surface2);
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.timeline-item:hover {
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.timeline-item.emi { border-left-color: var(--accent); }
+.timeline-item.ins { border-left-color: var(--green); }
+.timeline-item.sub { border-left-color: var(--orange); }
+
+.timeline-icon {
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.04);
+}
+.timeline-item.emi .timeline-icon { background: var(--accent-light); color: var(--accent); }
+.timeline-item.ins .timeline-icon { background: var(--green-light); color: var(--green); }
+.timeline-item.sub .timeline-icon { background: var(--orange-light); color: var(--orange); }
+
+.timeline-details {
+  flex: 1;
+}
+.timeline-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+.timeline-meta {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.timeline-amount {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" integrity="sha384-uLiAv4VcjM5H2Jsqzl8EajEaxPugj1CIzQaCjQ8c5//vC+elhxO5pZfXGxoLQi1W" crossorigin="anonymous"></script>
 <script>
@@ -523,6 +686,31 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
           <div class="panel-header"><span class="panel-title">Alerts &amp; Nudges</span></div>
           <div class="panel-body" id="ov-alerts">
             <div class="alert alert-info"><span>ℹ</span><span>Add your balances to get started.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BILL & PAYMENT CALENDAR -->
+      <div class="two-col" style="margin-bottom:16px;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">&#x1F4C5; Bill &amp; Payment Calendar</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="btn-cal-nav" onclick="prevMonth()">&#8249;</button>
+              <span id="calendar-month-year" style="font-family:'Lora',serif;font-size:13px;font-weight:600;min-width:90px;text-align:center;color:var(--text);"></span>
+              <button class="btn-cal-nav" onclick="nextMonth()">&#8250;</button>
+            </div>
+          </div>
+          <div class="panel-body" style="padding:12px;">
+            <div class="calendar-grid" id="calendar-grid"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">&#x1F514; Upcoming Bills &amp; Alerts</span>
+          </div>
+          <div class="panel-body" id="calendar-details" style="padding:12px;overflow-y:auto;max-height:260px;">
+            <div class="empty-state">Select a day on the calendar to see details</div>
           </div>
         </div>
       </div>
@@ -1514,6 +1702,8 @@ let nwChartInstance = null;
 let assetChartInstance = null;
 let budgetChartInstance = null;
 let taxChartInstance = null;
+const calendarDate = new Date();
+let selectedCalDay = new Date().getDate();
 
 let D = {
   accounts: [],
@@ -2591,6 +2781,7 @@ function renderAll() {
   renderTax();
   renderTxns();
   renderWidgets();
+  renderCalendar();
 }
 
 // ─────────────────────────────────────────────
@@ -3445,6 +3636,269 @@ function renderNPS() {
   document.getElementById('nps-80ccd-bar').style.width = pct + '%';
   document.getElementById('nps-ctb-d').textContent = fmt(Math.min(n.fyContrib,50000));
   document.getElementById('nps-rem-d').textContent = fmt(Math.max(0,50000-n.fyContrib));
+}
+
+// ─────────────────────────────────────────────
+// FINANCIAL CALENDAR
+// ─────────────────────────────────────────────
+function detectSubscriptions() {
+  const list = [];
+  const recurKw = ['netflix','prime','spotify','hotstar','jio','airtel','gym','subscription','sids farm','nobroker'];
+  const txns = filterByMember(D.transactions).filter(t => t.type === 'debit');
+  
+  recurKw.forEach(kw => {
+    const matching = txns.filter(t => (t.desc || '').toLowerCase().includes(kw));
+    if (matching.length > 0) {
+      matching.sort((a, b) => new Date(b.date) - new Date(a.date));
+      const latest = matching[0];
+      const d = new Date(latest.date);
+      const day = d.getDate();
+      list.push({
+        name: kw.charAt(0).toUpperCase() + kw.slice(1),
+        desc: latest.desc,
+        amount: latest.amount,
+        day: day,
+        lastDate: latest.date,
+        member: latest.member
+      });
+    }
+  });
+  return list;
+}
+
+function getCalendarEvents(year, month) {
+  const events = [];
+  
+  // 1. EMIs
+  filterByMember(D.loans).forEach(l => {
+    events.push({
+      type: 'emi',
+      name: l.name,
+      day: l.emiDay || 1,
+      amount: l.emi,
+      meta: l.lender || 'EMI',
+      member: l.member
+    });
+  });
+  
+  // 2. Insurance Renewals
+  filterByMember(D.insurance).forEach(p => {
+    if (!p.dueDate) return;
+    const d = new Date(p.dueDate);
+    const dueMonth = d.getMonth();
+    const dueYear = d.getFullYear();
+    const dueDay = d.getDate();
+    
+    let isDue = false;
+    const freq = (p.freq || 'yearly').toLowerCase();
+    
+    if (freq === 'monthly') {
+      isDue = true;
+    } else if (freq === 'quarterly') {
+      const diffMonths = (year - dueYear) * 12 + (month - dueMonth);
+      if (diffMonths >= 0 && diffMonths % 3 === 0) isDue = true;
+    } else if (freq === 'half-yearly' || freq === 'half yearly') {
+      const diffMonths = (year - dueYear) * 12 + (month - dueMonth);
+      if (diffMonths >= 0 && diffMonths % 6 === 0) isDue = true;
+    } else {
+      if (dueMonth === month) isDue = true;
+    }
+    
+    if (isDue) {
+      events.push({
+        type: 'ins',
+        name: p.name,
+        day: dueDay,
+        amount: p.premium,
+        meta: p.insurer || 'Insurance',
+        member: p.member
+      });
+    }
+  });
+  
+  // 3. Subscriptions
+  detectSubscriptions().forEach(s => {
+    events.push({
+      type: 'sub',
+      name: s.name,
+      day: s.day,
+      amount: s.amount,
+      meta: 'Subscription',
+      member: s.member
+    });
+  });
+  
+  return events;
+}
+
+function renderCalendar() {
+  const gridEl = document.getElementById('calendar-grid');
+  const monthYearEl = document.getElementById('calendar-month-year');
+  if (!gridEl || !monthYearEl) return;
+  
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  monthYearEl.textContent = monthNames[month] + ' ' + year;
+  
+  const events = getCalendarEvents(year, month);
+  
+  const accs = filterByMember(D.accounts);
+  const liquidBal = accs.reduce((s, a) => s + a.balance, 0);
+  
+  const today = new Date();
+  const isCurrentMonth = (year === today.getFullYear() && month === today.getMonth());
+  const todayDay = today.getDate();
+  
+  let runningBalance = liquidBal;
+  const lowBalanceDays = new Set();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (!isCurrentMonth || d >= todayDay) {
+      const dayEvents = events.filter(e => e.day === d);
+      const dayOutflow = dayEvents.reduce((s, e) => s + e.amount, 0);
+      runningBalance -= dayOutflow;
+      if (runningBalance < 0) {
+        lowBalanceDays.add(d);
+      }
+    }
+  }
+  
+  let html = '';
+  const dayHeaders = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  dayHeaders.forEach(h => {
+    html += `<div class="calendar-day-header">${h}</div>`;
+  });
+  
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const prevDaysInMonth = new Date(year, month, 0).getDate();
+  for (let i = firstDayIndex - 1; i >= 0; i--) {
+    const prevDay = prevDaysInMonth - i;
+    html += `<div class="calendar-day-cell other-month">
+      <span class="day-number">${prevDay}</span>
+    </div>`;
+  }
+  
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = isCurrentMonth && d === todayDay;
+    const isSelected = selectedCalDay === d;
+    const dayEvents = events.filter(e => e.day === d);
+    const hasLowBalance = lowBalanceDays.has(d);
+    
+    let cellClass = 'calendar-day-cell';
+    if (isToday) cellClass += ' today';
+    if (isSelected) cellClass += ' selected';
+    if (hasLowBalance) cellClass += ' low-balance-warning';
+    
+    let dotsHtml = '<div class="calendar-events-dots">';
+    if (dayEvents.length > 0) {
+      const uniqueTypes = [...new Set(dayEvents.map(e => e.type))];
+      uniqueTypes.slice(0, 3).forEach(type => {
+        dotsHtml += `<span class="cal-dot ${type}"></span>`;
+      });
+    }
+    dotsHtml += '</div>';
+    
+    html += `<div class="${cellClass}" onclick="selectCalDay(${d})">
+      <span class="day-number">${d}</span>
+      ${dotsHtml}
+    </div>`;
+  }
+  
+  const totalCells = firstDayIndex + daysInMonth;
+  const remainingCells = (7 - (totalCells % 7)) % 7;
+  for (let d = 1; d <= remainingCells; d++) {
+    html += `<div class="calendar-day-cell other-month">
+      <span class="day-number">${d}</span>
+    </div>`;
+  }
+  
+  gridEl.innerHTML = html;
+  renderCalendarDetails(events, lowBalanceDays, liquidBal);
+}
+
+function renderCalendarDetails(events, lowBalanceDays, liquidBal) {
+  const detailsEl = document.getElementById('calendar-details');
+  if (!detailsEl) return;
+  
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  
+  const selectedEvents = events.filter(e => e.day === selectedCalDay);
+  const monthOutflow = events.reduce((s, e) => s + e.amount, 0);
+  
+  let html = '';
+  
+  html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+    <div>
+      <div style="font-size:8.5px;color:var(--muted);text-transform:uppercase;font-family:'DM Mono',monospace;letter-spacing:0.05em;">Monthly Outflow</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-top:2px;">${fmt(monthOutflow)}</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:8.5px;color:var(--muted);text-transform:uppercase;font-family:'DM Mono',monospace;letter-spacing:0.05em;">Available Cash</div>
+      <div style="font-size:14px;font-weight:600;color:var(--green);margin-top:2px;">${fmt(liquidBal)}</div>
+    </div>
+  </div>`;
+  
+  if (lowBalanceDays.size > 0) {
+    const firstLowDay = Math.min(...Array.from(lowBalanceDays));
+    const dayEvents = events.filter(e => e.day === firstLowDay);
+    const lowEventNames = dayEvents.map(e => e.name).join(', ');
+    
+    html += `<div class="alert alert-danger" style="margin-bottom:12px;padding:10px;border-radius:6px;font-size:11px;line-height:1.4;">
+      <span>⚠️</span>
+      <span><strong>Low Balance Alert!</strong> Projected balance falls negative on the <strong>${firstLowDay}th</strong> due to payments for: <em>${lowEventNames}</em>. Total available liquid balance is insufficient.</span>
+    </div>`;
+  }
+  
+  const monthNamesShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const displayDateStr = `${selectedCalDay} ${monthNamesShort[month]} ${year}`;
+  
+  html += `<div style="font-weight:600;font-size:12px;margin-bottom:8px;color:var(--text);">Due on ${displayDateStr}</div>`;
+  
+  if (selectedEvents.length === 0) {
+    html += `<div class="empty-state" style="padding:20px 0;">
+      <div style="font-size:16px;opacity:0.4;">☀️</div>
+      <div style="margin-top:4px;font-size:11px;">No bills due on this day</div>
+    </div>`;
+  } else {
+    selectedEvents.forEach(e => {
+      let icon = '💵';
+      if (e.type === 'emi') icon = '≈';
+      if (e.type === 'ins') icon = '🛡️';
+      if (e.type === 'sub') icon = '🔄';
+      
+      html += `<div class="timeline-item ${e.type}">
+        <div class="timeline-icon">${icon}</div>
+        <div class="timeline-details">
+          <div class="timeline-title">${esc(e.name)}</div>
+          <div class="timeline-meta">${esc(e.meta)} &middot; ${memberTag(e.member)}</div>
+        </div>
+        <div class="timeline-amount" style="color:${e.type==='emi'?'var(--accent)':e.type==='ins'?'var(--green)':'var(--orange)'}">${fmt(e.amount)}</div>
+      </div>`;
+    });
+  }
+  
+  detailsEl.innerHTML = html;
+}
+
+function prevMonth() {
+  calendarDate.setMonth(calendarDate.getMonth() - 1);
+  selectedCalDay = 1;
+  renderCalendar();
+}
+
+function nextMonth() {
+  calendarDate.setMonth(calendarDate.getMonth() + 1);
+  selectedCalDay = 1;
+  renderCalendar();
+}
+
+function selectCalDay(day) {
+  selectedCalDay = day;
+  renderCalendar();
 }
 
 // ─────────────────────────────────────────────

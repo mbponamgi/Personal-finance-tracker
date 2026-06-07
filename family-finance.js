@@ -13,6 +13,8 @@ let nwChartInstance = null;
 let assetChartInstance = null;
 let budgetChartInstance = null;
 let taxChartInstance = null;
+const calendarDate = new Date();
+let selectedCalDay = new Date().getDate();
 
 let D = {
   accounts: [],
@@ -692,6 +694,7 @@ function renderAll() {
   renderBudget();
   renderTax();
   renderTxns();
+  renderCalendar();
 }
 
 // ─────────────────────────────────────────────
@@ -1456,6 +1459,269 @@ function renderNPS() {
   document.getElementById('nps-80ccd-bar').style.width = pct + '%';
   document.getElementById('nps-ctb-d').textContent = fmt(Math.min(n.fyContrib,50000));
   document.getElementById('nps-rem-d').textContent = fmt(Math.max(0,50000-n.fyContrib));
+}
+
+// ─────────────────────────────────────────────
+// FINANCIAL CALENDAR
+// ─────────────────────────────────────────────
+function detectSubscriptions() {
+  const list = [];
+  const recurKw = ['netflix','prime','spotify','hotstar','jio','airtel','gym','subscription','sids farm','nobroker'];
+  const txns = filterByMember(D.transactions).filter(t => t.type === 'debit');
+  
+  recurKw.forEach(kw => {
+    const matching = txns.filter(t => (t.desc || '').toLowerCase().includes(kw));
+    if (matching.length > 0) {
+      matching.sort((a, b) => new Date(b.date) - new Date(a.date));
+      const latest = matching[0];
+      const d = new Date(latest.date);
+      const day = d.getDate();
+      list.push({
+        name: kw.charAt(0).toUpperCase() + kw.slice(1),
+        desc: latest.desc,
+        amount: latest.amount,
+        day: day,
+        lastDate: latest.date,
+        member: latest.member
+      });
+    }
+  });
+  return list;
+}
+
+function getCalendarEvents(year, month) {
+  const events = [];
+  
+  // 1. EMIs
+  filterByMember(D.loans).forEach(l => {
+    events.push({
+      type: 'emi',
+      name: l.name,
+      day: l.emiDay || 1,
+      amount: l.emi,
+      meta: l.lender || 'EMI',
+      member: l.member
+    });
+  });
+  
+  // 2. Insurance Renewals
+  filterByMember(D.insurance).forEach(p => {
+    if (!p.dueDate) return;
+    const d = new Date(p.dueDate);
+    const dueMonth = d.getMonth();
+    const dueYear = d.getFullYear();
+    const dueDay = d.getDate();
+    
+    let isDue = false;
+    const freq = (p.freq || 'yearly').toLowerCase();
+    
+    if (freq === 'monthly') {
+      isDue = true;
+    } else if (freq === 'quarterly') {
+      const diffMonths = (year - dueYear) * 12 + (month - dueMonth);
+      if (diffMonths >= 0 && diffMonths % 3 === 0) isDue = true;
+    } else if (freq === 'half-yearly' || freq === 'half yearly') {
+      const diffMonths = (year - dueYear) * 12 + (month - dueMonth);
+      if (diffMonths >= 0 && diffMonths % 6 === 0) isDue = true;
+    } else {
+      if (dueMonth === month) isDue = true;
+    }
+    
+    if (isDue) {
+      events.push({
+        type: 'ins',
+        name: p.name,
+        day: dueDay,
+        amount: p.premium,
+        meta: p.insurer || 'Insurance',
+        member: p.member
+      });
+    }
+  });
+  
+  // 3. Subscriptions
+  detectSubscriptions().forEach(s => {
+    events.push({
+      type: 'sub',
+      name: s.name,
+      day: s.day,
+      amount: s.amount,
+      meta: 'Subscription',
+      member: s.member
+    });
+  });
+  
+  return events;
+}
+
+function renderCalendar() {
+  const gridEl = document.getElementById('calendar-grid');
+  const monthYearEl = document.getElementById('calendar-month-year');
+  if (!gridEl || !monthYearEl) return;
+  
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  monthYearEl.textContent = monthNames[month] + ' ' + year;
+  
+  const events = getCalendarEvents(year, month);
+  
+  const accs = filterByMember(D.accounts);
+  const liquidBal = accs.reduce((s, a) => s + a.balance, 0);
+  
+  const today = new Date();
+  const isCurrentMonth = (year === today.getFullYear() && month === today.getMonth());
+  const todayDay = today.getDate();
+  
+  let runningBalance = liquidBal;
+  const lowBalanceDays = new Set();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (!isCurrentMonth || d >= todayDay) {
+      const dayEvents = events.filter(e => e.day === d);
+      const dayOutflow = dayEvents.reduce((s, e) => s + e.amount, 0);
+      runningBalance -= dayOutflow;
+      if (runningBalance < 0) {
+        lowBalanceDays.add(d);
+      }
+    }
+  }
+  
+  let html = '';
+  const dayHeaders = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  dayHeaders.forEach(h => {
+    html += `<div class="calendar-day-header">${h}</div>`;
+  });
+  
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const prevDaysInMonth = new Date(year, month, 0).getDate();
+  for (let i = firstDayIndex - 1; i >= 0; i--) {
+    const prevDay = prevDaysInMonth - i;
+    html += `<div class="calendar-day-cell other-month">
+      <span class="day-number">${prevDay}</span>
+    </div>`;
+  }
+  
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = isCurrentMonth && d === todayDay;
+    const isSelected = selectedCalDay === d;
+    const dayEvents = events.filter(e => e.day === d);
+    const hasLowBalance = lowBalanceDays.has(d);
+    
+    let cellClass = 'calendar-day-cell';
+    if (isToday) cellClass += ' today';
+    if (isSelected) cellClass += ' selected';
+    if (hasLowBalance) cellClass += ' low-balance-warning';
+    
+    let dotsHtml = '<div class="calendar-events-dots">';
+    if (dayEvents.length > 0) {
+      const uniqueTypes = [...new Set(dayEvents.map(e => e.type))];
+      uniqueTypes.slice(0, 3).forEach(type => {
+        dotsHtml += `<span class="cal-dot ${type}"></span>`;
+      });
+    }
+    dotsHtml += '</div>';
+    
+    html += `<div class="${cellClass}" onclick="selectCalDay(${d})">
+      <span class="day-number">${d}</span>
+      ${dotsHtml}
+    </div>`;
+  }
+  
+  const totalCells = firstDayIndex + daysInMonth;
+  const remainingCells = (7 - (totalCells % 7)) % 7;
+  for (let d = 1; d <= remainingCells; d++) {
+    html += `<div class="calendar-day-cell other-month">
+      <span class="day-number">${d}</span>
+    </div>`;
+  }
+  
+  gridEl.innerHTML = html;
+  renderCalendarDetails(events, lowBalanceDays, liquidBal);
+}
+
+function renderCalendarDetails(events, lowBalanceDays, liquidBal) {
+  const detailsEl = document.getElementById('calendar-details');
+  if (!detailsEl) return;
+  
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  
+  const selectedEvents = events.filter(e => e.day === selectedCalDay);
+  const monthOutflow = events.reduce((s, e) => s + e.amount, 0);
+  
+  let html = '';
+  
+  html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+    <div>
+      <div style="font-size:8.5px;color:var(--muted);text-transform:uppercase;font-family:'DM Mono',monospace;letter-spacing:0.05em;">Monthly Outflow</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-top:2px;">${fmt(monthOutflow)}</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:8.5px;color:var(--muted);text-transform:uppercase;font-family:'DM Mono',monospace;letter-spacing:0.05em;">Available Cash</div>
+      <div style="font-size:14px;font-weight:600;color:var(--green);margin-top:2px;">${fmt(liquidBal)}</div>
+    </div>
+  </div>`;
+  
+  if (lowBalanceDays.size > 0) {
+    const firstLowDay = Math.min(...Array.from(lowBalanceDays));
+    const dayEvents = events.filter(e => e.day === firstLowDay);
+    const lowEventNames = dayEvents.map(e => e.name).join(', ');
+    
+    html += `<div class="alert alert-danger" style="margin-bottom:12px;padding:10px;border-radius:6px;font-size:11px;line-height:1.4;">
+      <span>⚠️</span>
+      <span><strong>Low Balance Alert!</strong> Projected balance falls negative on the <strong>${firstLowDay}th</strong> due to payments for: <em>${lowEventNames}</em>. Total available liquid balance is insufficient.</span>
+    </div>`;
+  }
+  
+  const monthNamesShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const displayDateStr = `${selectedCalDay} ${monthNamesShort[month]} ${year}`;
+  
+  html += `<div style="font-weight:600;font-size:12px;margin-bottom:8px;color:var(--text);">Due on ${displayDateStr}</div>`;
+  
+  if (selectedEvents.length === 0) {
+    html += `<div class="empty-state" style="padding:20px 0;">
+      <div style="font-size:16px;opacity:0.4;">☀️</div>
+      <div style="margin-top:4px;font-size:11px;">No bills due on this day</div>
+    </div>`;
+  } else {
+    selectedEvents.forEach(e => {
+      let icon = '💵';
+      if (e.type === 'emi') icon = '≈';
+      if (e.type === 'ins') icon = '🛡️';
+      if (e.type === 'sub') icon = '🔄';
+      
+      html += `<div class="timeline-item ${e.type}">
+        <div class="timeline-icon">${icon}</div>
+        <div class="timeline-details">
+          <div class="timeline-title">${esc(e.name)}</div>
+          <div class="timeline-meta">${esc(e.meta)} &middot; ${memberTag(e.member)}</div>
+        </div>
+        <div class="timeline-amount" style="color:${e.type==='emi'?'var(--accent)':e.type==='ins'?'var(--green)':'var(--orange)'}">${fmt(e.amount)}</div>
+      </div>`;
+    });
+  }
+  
+  detailsEl.innerHTML = html;
+}
+
+function prevMonth() {
+  calendarDate.setMonth(calendarDate.getMonth() - 1);
+  selectedCalDay = 1;
+  renderCalendar();
+}
+
+function nextMonth() {
+  calendarDate.setMonth(calendarDate.getMonth() + 1);
+  selectedCalDay = 1;
+  renderCalendar();
+}
+
+function selectCalDay(day) {
+  selectedCalDay = day;
+  renderCalendar();
 }
 
 // ─────────────────────────────────────────────
