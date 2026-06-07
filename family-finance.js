@@ -87,6 +87,7 @@ const cr = n => numbersHidden ? '₹ •• Cr' : '₹' + (Math.abs(n||0)/1e7).t
 const lk = n => numbersHidden ? '₹ •• L' : '₹' + (Math.abs(n||0)/1e5).toFixed(1) + ' L';
 const todayStr = () => new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 const pf = (v, max) => Math.min(Math.round((v/max)*100), 100);
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -99,10 +100,85 @@ function memberTag(m) {
   return `<span class="member-tag tag-${m}">${name}</span>`;
 }
 
+function getTransactionAccountName(t) {
+  if (!t.account) return 'Cash / Unassigned';
+  const acc = D.accounts.find(a => a.id === t.account || a.id === Number(t.account) || a.name === t.account);
+  if (acc) return acc.name;
+  const card = D.cards.find(c => c.id === t.account || c.id === Number(t.account) || c.name === t.account);
+  if (card) return card.name;
+  const importNames = {
+    'icici-salary': 'ICICI Salary',
+    'icici-cc': 'ICICI Credit Card',
+    'sc-savings': 'SC Savings',
+    'sc': 'SC Savings',
+    'amex': 'Amex Credit Card'
+  };
+  return importNames[t.account] || t.account;
+}
+
+function getTransactionAccountBadge(t) {
+  if (!t.account) return '';
+  const name = getTransactionAccountName(t);
+  if (name === 'Cash / Unassigned') return '';
+  const acc = D.accounts.find(a => a.id === t.account || a.id === Number(t.account) || a.name === t.account);
+  if (acc) return `<span class="txn-account-tag">🏦 ${esc(acc.name)}</span>`;
+  const card = D.cards.find(c => c.id === t.account || c.id === Number(t.account) || c.name === t.account);
+  if (card) return `<span class="txn-account-tag">💳 ${esc(card.name)}</span>`;
+  const lower = name.toLowerCase();
+  const isCard = lower.includes('card') || lower.includes('cc') || lower.includes('amex');
+  return `<span class="txn-account-tag">${isCard ? '💳' : '🏦'} ${esc(name)}</span>`;
+}
+
+function populateTxnAccountFilter() {
+  const sel = document.getElementById('txn-filter-account');
+  if (!sel) return;
+  const currentVal = sel.value;
+  let html = '<option value="">All Accounts / Cards</option>';
+  if (D.accounts && D.accounts.length > 0) {
+    html += '<optgroup label="Bank Accounts">';
+    D.accounts.forEach(a => {
+      html += `<option value="${a.id}">${esc(a.name)} (${MEMBER_NAMES[a.member] || a.member})</option>`;
+    });
+    html += '</optgroup>';
+  }
+  if (D.cards && D.cards.length > 0) {
+    html += '<optgroup label="Credit Cards">';
+    D.cards.forEach(c => {
+      html += `<option value="${c.id}">${esc(c.name)} (${MEMBER_NAMES[c.member] || c.member})</option>`;
+    });
+    html += '</optgroup>';
+  }
+  html += '<option value="unassigned">Cash / Unassigned</option>';
+  sel.innerHTML = html;
+  sel.value = currentVal;
+}
+
+function populateTxnModalAccounts() {
+  const sel = document.getElementById('m-txn-account');
+  if (!sel) return;
+  let html = '<option value="">Cash / Unassigned</option>';
+  if (D.accounts && D.accounts.length > 0) {
+    html += '<optgroup label="Bank Accounts">';
+    D.accounts.forEach(a => {
+      html += `<option value="${a.id}">${esc(a.name)} (${MEMBER_NAMES[a.member] || a.member})</option>`;
+    });
+    html += '</optgroup>';
+  }
+  if (D.cards && D.cards.length > 0) {
+    html += '<optgroup label="Credit Cards">';
+    D.cards.forEach(c => {
+      html += `<option value="${c.id}">${esc(c.name)} (${MEMBER_NAMES[c.member] || c.member})</option>`;
+    });
+    html += '</optgroup>';
+  }
+  sel.innerHTML = html;
+}
+
 function filterByMember(arr) {
   if (currentMember === 'all') return arr;
   return arr.filter(item => item.member === currentMember || item.member === 'joint');
 }
+
 
 // ─────────────────────────────────────────────
 // NAV
@@ -490,13 +566,15 @@ function saveTxn() {
     type: document.getElementById('m-txn-type').value,
     cat: document.getElementById('m-txn-cat').value,
     member: document.getElementById('m-txn-member').value,
-    date: document.getElementById('m-txn-date').value || new Date().toISOString().split('T')[0]
+    date: document.getElementById('m-txn-date').value || new Date().toISOString().split('T')[0],
+    account: document.getElementById('m-txn-account').value || ''
   };
   if (!t.desc || !t.amount) return;
   D.transactions.unshift(t);
   save(); renderAll(); closeModal('txnModal');
   document.getElementById('m-txn-desc').value = '';
   document.getElementById('m-txn-amt').value = '';
+  document.getElementById('m-txn-account').value = '';
 }
 
 function saveBudget() {
@@ -1376,29 +1454,84 @@ function renderTax() {
 // TRANSACTIONS
 // ─────────────────────────────────────────────
 function renderTxns() {
-  const list = filterByMember(D.transactions);
+  populateTxnAccountFilter();
+  const search  = (document.getElementById('txn-search')||{}).value||'';
+  const catF    = (document.getElementById('txn-filter-cat')||{}).value||'';
+  const typeF   = (document.getElementById('txn-filter-type')||{}).value||'';
+  const memF    = (document.getElementById('txn-filter-member')||{}).value||'';
+  const dateFrom = (document.getElementById('txn-date-from')||{}).value||'';
+  const dateTo   = (document.getElementById('txn-date-to')||{}).value||'';
+  const accF    = (document.getElementById('txn-filter-account')||{}).value||'';
+  
+  let list = filterByMember(D.transactions);
+  if (search)   list = list.filter(t => (t.desc||'').toLowerCase().includes(search.toLowerCase()));
+  if (catF)     list = list.filter(t => t.cat === catF);
+  if (typeF)    list = list.filter(t => t.type === typeF);
+  if (memF)     list = list.filter(t => t.member === memF);
+  if (dateFrom) list = list.filter(t => t.date >= dateFrom);
+  if (dateTo)   list = list.filter(t => t.date <= dateTo);
+  if (accF) {
+    if (accF === 'unassigned') {
+      list = list.filter(t => !t.account);
+    } else {
+      list = list.filter(t => t.account && (t.account.toString() === accF.toString()));
+    }
+  }
+  
   const el = document.getElementById('txn-list');
+  const countEl = document.getElementById('txn-count');
+  const delBtn = document.getElementById('del-all-txns-btn');
   if (!list.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">≡</div>No transactions</div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#8801;</div>No transactions match your filters</div>';
+    if (countEl) countEl.textContent = '';
+    if (delBtn) delBtn.style.display = 'none';
     return;
   }
+  if (delBtn) delBtn.style.display = '';
   const catColors = {
     'Food & Dining':'#b5813a','Travel':'#4a7c6f','Shopping':'#7b5ea7','Utilities':'#3a7d54',
     'Entertainment':'#c0392b','Healthcare':'#4a6fa5','Education':'#c0692b','Insurance':'#7ab8a0',
     'Investment':'#3a7d54','Salary':'#3a7d54','EMI':'#7b5ea7','Other':'#8a8279'
   };
-  el.innerHTML = list.slice(0,60).map(t =>
+  const shown = list.slice(0,100);
+  el.innerHTML = shown.map(t =>
     `<div class="txn-row">
       <div class="txn-left">
         <div class="txn-dot" style="background:${catColors[t.cat]||'#8a8279'}"></div>
         <div>
-          <div class="txn-name">${t.desc} ${memberTag(t.member)}</div>
-          <div class="txn-cat">${t.cat} · ${t.date}</div>
+          <div class="txn-name">${esc(t.desc)} ${memberTag(t.member)}</div>
+          <div class="txn-cat">${t.cat} &middot; ${t.date}${getTransactionAccountBadge(t)}</div>
         </div>
       </div>
-      <div class="txn-amount ${t.type}">${t.type==='debit'?'−':'+'}${fmt(t.amount)}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="txn-amount ${t.type}">${t.type==='debit'?'&minus;':'+'}${fmt(t.amount)}</div>
+        <button onclick="deleteTxn(${t.id})" title="Delete" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 4px;line-height:1" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">&#x2715;</button>
+      </div>
     </div>`
   ).join('');
+  if (countEl) countEl.textContent = `Showing ${shown.length} of ${list.length} transactions`;
+}
+
+function deleteTxn(id) {
+  D.transactions = D.transactions.filter(t => t.id !== id);
+  save(); renderAll();
+}
+
+function deleteAllTxns() {
+  const count = D.transactions.length;
+  if (!count) return;
+  if (!window.confirm(`Delete all ${count} transactions? This cannot be undone.`)) return;
+  D.transactions = [];
+  save(); renderAll();
+}
+
+function resetTxnFilters() {
+  const ids = ['txn-search','txn-filter-cat','txn-filter-type','txn-filter-member','txn-date-from','txn-date-to','txn-filter-account'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderTxns();
 }
 
 // ─────────────────────────────────────────────
@@ -1615,6 +1748,44 @@ function parseCSV(event) {
 function confirmImport() {
   if (!parsedRows.length) return;
   const cfg = BANK_CONFIGS[selectedBank];
+  const m = currentMember === 'all' ? 'madhu' : currentMember;
+  let txnAccountId = '';
+
+  if (selectedBank === 'icici-salary' || selectedBank === 'sc') {
+    const bankName = selectedBank === 'icici-salary' ? 'ICICI Savings' : 'SC Savings';
+    let existingAcc = D.accounts.find(a => a.member === m && a.name.toLowerCase().includes(bankName.toLowerCase()));
+    if (!existingAcc) {
+      existingAcc = {
+        id: Date.now() + Math.random(),
+        name: bankName,
+        member: m,
+        type: 'savings',
+        balance: 0,
+        credits: 0,
+        debits: 0,
+        updated: todayStr()
+      };
+      D.accounts.push(existingAcc);
+    }
+    txnAccountId = existingAcc.id;
+  } else if (selectedBank === 'icici-cc' || selectedBank === 'amex') {
+    const defaultName = selectedBank === 'icici-cc' ? 'ICICI Credit Card' : 'American Express';
+    let existingCard = D.cards.find(c => c.member === m && c.name.toLowerCase().includes(defaultName.toLowerCase()));
+    if (!existingCard) {
+      existingCard = {
+        id: Date.now() + Math.random(),
+        name: defaultName,
+        member: m,
+        outstanding: 0,
+        limit: 150000,
+        dueDate: '',
+        minDue: 0
+      };
+      D.cards.push(existingCard);
+    }
+    txnAccountId = existingCard.id;
+  }
+
   const existing = new Set(D.transactions.map(t => t.date+'|'+t.desc+'|'+t.amount));
   let added = 0, dupes = 0;
   parsedRows.forEach(r => {
@@ -1624,7 +1795,8 @@ function confirmImport() {
       id: Date.now()+Math.random(),
       desc: r.desc, amount: r.amount, type: r.type,
       cat: r.cat, member: currentMember === 'all' ? 'madhu' : currentMember,
-      date: r.date
+      date: r.date,
+      account: txnAccountId
     });
     added++;
   });
