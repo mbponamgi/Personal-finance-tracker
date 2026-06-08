@@ -1459,15 +1459,36 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
     <div class="form-grid">
       <div class="form-group form-full"><label class="form-label">Name</label><input class="form-input" id="m-inv-name" placeholder="e.g. Axis Bluechip Fund"></div>
       <div class="form-group"><label class="form-label">Type</label>
-        <select class="form-select" id="m-inv-type"><option>Mutual Fund</option><option>Stock</option><option>Fixed Deposit</option><option>PPF</option><option>SGB</option><option>Other</option></select>
+        <select class="form-select" id="m-inv-type" onchange="toggleEsopFields()">
+          <option>Mutual Fund</option><option>Stock</option><option>Fixed Deposit</option><option>PPF</option><option>SGB</option><option>ESOP</option><option>RSU</option><option>Other</option>
+        </select>
       </div>
       <div class="form-group"><label class="form-label">Member</label>
         <select class="form-select" id="m-inv-member">
           <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Invested (₹)</label><input class="form-input" id="m-inv-cost" type="number" placeholder="0"></div>
-      <div class="form-group"><label class="form-label">Current Value (₹)</label><input class="form-input" id="m-inv-val" type="number" placeholder="0"></div>
+      <div class="form-group" id="inv-cost-group"><label class="form-label">Invested (₹)</label><input class="form-input" id="m-inv-cost" type="number" placeholder="0"></div>
+      <div class="form-group" id="inv-val-group"><label class="form-label">Current Value (₹)</label><input class="form-input" id="m-inv-val" type="number" placeholder="0"></div>
+      <!-- ESOP / RSU fields — shown only when type is ESOP or RSU -->
+      <div id="esop-fields" style="display:none;grid-column:1/-1">
+        <div style="font-size:11px;color:var(--muted);margin:4px 0 10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border);padding-top:12px">Vesting Details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+          <div class="form-group"><label class="form-label">Grant Date</label><input class="form-input" id="m-inv-grant-date" type="date"></div>
+          <div class="form-group"><label class="form-label">Total Units Granted</label><input class="form-input" id="m-inv-units" type="number" placeholder="e.g. 500"></div>
+          <div class="form-group"><label class="form-label">Grant / Strike Price (₹/unit)</label><input class="form-input" id="m-inv-grant-price" type="number" placeholder="0 for RSUs"></div>
+          <div class="form-group"><label class="form-label">Current Price (₹/unit)</label><input class="form-input" id="m-inv-cur-price" type="number" placeholder="Latest valuation"></div>
+          <div class="form-group"><label class="form-label">Vesting Period (months)</label><input class="form-input" id="m-inv-vest-months" type="number" placeholder="48" value="48"></div>
+          <div class="form-group"><label class="form-label">Cliff Period (months)</label><input class="form-input" id="m-inv-cliff" type="number" placeholder="12" value="12"></div>
+          <div class="form-group" style="grid-column:1/-1"><label class="form-label">Vesting Frequency</label>
+            <select class="form-select" id="m-inv-vest-freq">
+              <option value="monthly">Monthly</option>
+              <option value="quarterly" selected>Quarterly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-actions"><button class="btn" onclick="closeModal('invModal')">Cancel</button><button class="btn btn-primary" onclick="saveInv()">Save</button></div>
   </div>

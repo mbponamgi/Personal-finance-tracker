@@ -372,6 +372,11 @@ function openAddIns() {
 function openAddInv() {
   document.getElementById('invModalTitle').textContent = 'Add Investment';
   document.getElementById('m-inv-id').value = '';
+  document.getElementById('m-inv-name').value = '';
+  document.getElementById('m-inv-type').value = 'Mutual Fund';
+  document.getElementById('m-inv-cost').value = '';
+  document.getElementById('m-inv-val').value = '';
+  toggleEsopFields();
   openModal('invModal');
 }
 
@@ -385,6 +390,16 @@ function openEditInv(id) {
   document.getElementById('m-inv-member').value = inv.member;
   document.getElementById('m-inv-cost').value = inv.cost || 0;
   document.getElementById('m-inv-val').value = inv.value || 0;
+  if (isEsopType(inv.type)) {
+    document.getElementById('m-inv-grant-date').value = inv.grantDate || '';
+    document.getElementById('m-inv-units').value = inv.totalUnits || '';
+    document.getElementById('m-inv-grant-price').value = inv.grantPrice || '';
+    document.getElementById('m-inv-cur-price').value = inv.currentPrice || '';
+    document.getElementById('m-inv-vest-months').value = inv.vestingMonths || 48;
+    document.getElementById('m-inv-cliff').value = inv.cliffMonths || 12;
+    document.getElementById('m-inv-vest-freq').value = inv.vestingFrequency || 'quarterly';
+  }
+  toggleEsopFields();
   openModal('invModal');
 }
 
@@ -685,15 +700,28 @@ function deleteGold(id) {
 
 function saveInv() {
   const idVal = document.getElementById('m-inv-id').value;
+  const type = document.getElementById('m-inv-type').value;
   const inv = {
     id: idVal ? +idVal : Date.now(),
     name: document.getElementById('m-inv-name').value,
-    type: document.getElementById('m-inv-type').value,
+    type,
     member: document.getElementById('m-inv-member').value,
-    cost: +document.getElementById('m-inv-cost').value || 0,
-    value: +document.getElementById('m-inv-val').value || 0
   };
   if (!inv.name) return;
+  if (isEsopType(type)) {
+    inv.grantDate = document.getElementById('m-inv-grant-date').value;
+    inv.totalUnits = +document.getElementById('m-inv-units').value || 0;
+    inv.grantPrice = +document.getElementById('m-inv-grant-price').value || 0;
+    inv.currentPrice = +document.getElementById('m-inv-cur-price').value || 0;
+    inv.vestingMonths = +document.getElementById('m-inv-vest-months').value || 48;
+    inv.cliffMonths = +document.getElementById('m-inv-cliff').value || 12;
+    inv.vestingFrequency = document.getElementById('m-inv-vest-freq').value;
+    inv.cost = Math.round(inv.grantPrice * inv.totalUnits);
+    inv.value = Math.round(calcVestedUnits(inv) * inv.currentPrice);
+  } else {
+    inv.cost = +document.getElementById('m-inv-cost').value || 0;
+    inv.value = +document.getElementById('m-inv-val').value || 0;
+  }
   upsert(D.investments, inv);
   snapshotNW(); save(); renderAll(); closeModal('invModal');
   document.getElementById('m-inv-id').value = '';
@@ -701,6 +729,7 @@ function saveInv() {
   document.getElementById('m-inv-name').value = '';
   document.getElementById('m-inv-cost').value = '';
   document.getElementById('m-inv-val').value = '';
+  toggleEsopFields();
 }
 
 function deleteInv(id) {
@@ -1110,6 +1139,38 @@ function upsert(arr, item) {
   const i = arr.findIndex(x => x.id === item.id);
   if (i >= 0) arr[i] = item;
   else arr.push(item);
+}
+
+// ─────────────────────────────────────────────
+// ESOP / RSU HELPERS
+// ─────────────────────────────────────────────
+function calcVestedUnits(inv) {
+  if (!inv.grantDate || !inv.totalUnits) return 0;
+  const now = new Date();
+  const grantDate = new Date(inv.grantDate);
+  const monthsElapsed = Math.max(0,
+    (now.getFullYear() - grantDate.getFullYear()) * 12 + (now.getMonth() - grantDate.getMonth())
+  );
+  const cliff = inv.cliffMonths || 0;
+  if (monthsElapsed < cliff) return 0;
+  const vestMonths = inv.vestingMonths || 48;
+  const freqMap = { monthly: 1, quarterly: 3, annual: 12 };
+  const freqMonths = freqMap[inv.vestingFrequency] || 3;
+  const totalCycles = Math.round(vestMonths / freqMonths);
+  const completedCycles = Math.min(totalCycles, Math.floor(monthsElapsed / freqMonths));
+  return Math.floor((completedCycles / totalCycles) * inv.totalUnits);
+}
+
+function isEsopType(type) {
+  return type === 'ESOP' || type === 'RSU';
+}
+
+function toggleEsopFields() {
+  const type = document.getElementById('m-inv-type').value;
+  const esop = isEsopType(type);
+  document.getElementById('esop-fields').style.display = esop ? '' : 'none';
+  document.getElementById('inv-cost-group').style.display = esop ? 'none' : '';
+  document.getElementById('inv-val-group').style.display = esop ? 'none' : '';
 }
 
 // ─────────────────────────────────────────────
@@ -2255,6 +2316,14 @@ function renderGold() {
 // INVESTMENTS
 // ─────────────────────────────────────────────
 function renderInv() {
+  // Recompute ESOP/RSU cost+value from live vesting so NW stays accurate
+  D.investments.forEach(inv => {
+    if (isEsopType(inv.type)) {
+      inv.cost = Math.round((inv.grantPrice || 0) * (inv.totalUnits || 0));
+      inv.value = Math.round(calcVestedUnits(inv) * (inv.currentPrice || 0));
+    }
+  });
+
   const list = filterByMember(D.investments);
   const cost = list.reduce((s,i)=>s+i.cost,0);
   const val = list.reduce((s,i)=>s+i.value,0);
@@ -2270,6 +2339,43 @@ function renderInv() {
     return;
   }
   tbody.innerHTML = list.map(inv => {
+    if (isEsopType(inv.type)) {
+      const vested = calcVestedUnits(inv);
+      const total = inv.totalUnits || 0;
+      const unvested = total - vested;
+      const vestPct = total ? Math.round(vested / total * 100) : 0;
+      const vestedVal = Math.round(vested * (inv.currentPrice || 0));
+      const totalPotential = Math.round(total * (inv.currentPrice || 0));
+      const priceGain = inv.grantPrice && inv.currentPrice
+        ? (((inv.currentPrice - inv.grantPrice) / inv.grantPrice) * 100).toFixed(1)
+        : null;
+      return `<tr>
+        <td>
+          <div style="font-size:12px;font-weight:500">${esc(inv.name)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${vested.toLocaleString('en-IN')} / ${total.toLocaleString('en-IN')} units vested · ₹${(inv.currentPrice||0).toLocaleString('en-IN')}/unit</div>
+          <div style="margin-top:5px;background:var(--surface2);border-radius:3px;height:4px;width:120px">
+            <div style="width:${vestPct}%;height:100%;background:var(--accent);border-radius:3px;transition:width .3s"></div>
+          </div>
+        </td>
+        <td><span class="badge badge-teal" style="font-size:9px;padding:2px 6px">${inv.type}</span></td>
+        <td>${memberTag(inv.member)}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px">
+          ${inv.grantPrice ? fmt(inv.grantPrice)+'/u' : 'Free'}
+          <div style="font-size:10px;color:var(--muted)">${total.toLocaleString('en-IN')} granted</div>
+        </td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px">
+          ${fmt(vestedVal)}
+          ${unvested > 0 ? `<div style="font-size:10px;color:var(--muted)">+${fmt(totalPotential - vestedVal)} unvested</div>` : ''}
+        </td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;color:${vestPct>=100?'var(--green)':'var(--accent)'}">${vestPct}% vested
+          ${priceGain !== null ? `<div style="font-size:10px;color:${priceGain>=0?'var(--green)':'var(--red)'}">${priceGain>=0?'+':''}${priceGain}% price</div>` : ''}
+          <div style="margin-top:2px">
+            <button onclick="openEditInv(${inv.id})" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:11px">✎</button>
+            <button onclick="deleteInv(${inv.id})" style="margin-left:4px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">✕</button>
+          </div>
+        </td>
+      </tr>`;
+    }
     const r = inv.cost ? (((inv.value-inv.cost)/inv.cost)*100).toFixed(1) : 0;
     return `<tr>
       <td><div style="font-size:12px;font-weight:500">${esc(inv.name)}</div></td>
