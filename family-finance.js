@@ -19,10 +19,7 @@ let selectedCalDay = new Date().getDate();
 let D = {
   accounts: [],
   cards: [],
-  rewards: {
-    'amex':    {points:0, rate:0.5,  expiry:'', tier:'Green'},
-    'icici-cc':{points:0, rate:0.25, expiry:'', tier:''}
-  },
+  rewards: [],
   investments: [],
   insurance: [],
   properties: [],
@@ -30,7 +27,8 @@ let D = {
   gold: [],
   goldRate: 7500,
   epf:  {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null},
-  nps:  {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75},
+  gratuity: {employer:'', joiningDate:'', basicDA:0, actualAccrued:0},
+  nps:  {},
   tax:  {gross:0, s80c:0, s80ccd:0, s24b:0, s80d:0, hra:0},
   transactions: [],
   budgets: {
@@ -47,6 +45,9 @@ function load() {
     if (s) {
       const parsed = JSON.parse(s);
       D = deepMerge(D, parsed);
+      if (D.nps && D.nps.tier1 !== undefined) {
+        D.nps = { 'madhu': Object.assign({}, D.nps) };
+      }
     }
   } catch(e) {}
 }
@@ -94,7 +95,13 @@ const cr = n => numbersHidden ? '₹ •• Cr' : '₹' + (Math.abs(n||0)/1e7).t
 const lk = n => numbersHidden ? '₹ •• L' : '₹' + (Math.abs(n||0)/1e5).toFixed(1) + ' L';
 const todayStr = () => new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 const pf = (v, max) => Math.min(Math.round((v/max)*100), 100);
+// Security: escape user-supplied strings before inserting into innerHTML
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+// Security: strip HTML tags from auto-detected strings (e.g. loan names from CSV)
+const stripTags = s => String(s||'').replace(/<[^>]*>/g, '');
+// Debug flag — set to true only during local development, never in production
+const _DBG = false;
+const _log = (...a) => { if (_DBG) console.log(...a); };
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -245,18 +252,28 @@ function ctxAdd() {
 // ─────────────────────────────────────────────
 // MODALS
 // ─────────────────────────────────────────────
-function openModal(id) { document.getElementById(id).classList.add('open'); }
+function openModal(id) {
+  if (id === 'txnModal') {
+    populateTxnModalAccounts();
+  }
+  document.getElementById(id).classList.add('open');
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
-function openRewardModal(key) {
-  const names = {'amex':'Amex MR Points','icici-cc':'ICICI Reward Points'};
-  document.getElementById('rewardModalTitle').textContent = 'Update — ' + names[key];
-  const r = D.rewards[key];
-  document.getElementById('m-rw-pts').value = r.points || '';
-  document.getElementById('m-rw-rate').value = r.rate || '';
-  document.getElementById('m-rw-exp').value = r.expiry || '';
-  document.getElementById('m-rw-tier').value = r.tier || '';
-  document.getElementById('m-rw-key').value = key;
+function openRewardModal(id) {
+  migrateRewards();
+  const r = id ? D.rewards.find(x => x.id === id) : null;
+  document.getElementById('rewardModalTitle').textContent = r ? 'Edit Reward Program' : 'Add Reward Program';
+  document.getElementById('m-rw-id').value = r ? r.id : '';
+  document.getElementById('m-rw-name').value = r ? r.name : '';
+  document.getElementById('m-rw-prog').value = r ? r.program : 'default';
+  document.getElementById('m-rw-pts').value = r ? r.points : '';
+  document.getElementById('m-rw-rate').value = r ? r.rate : '0.25';
+  document.getElementById('m-rw-exp').value = r ? r.expiry : '';
+  document.getElementById('m-rw-tier').value = r ? r.tier : '';
+  // Populate card name suggestions from D.cards
+  const dl = document.getElementById('rw-card-names');
+  if (dl) dl.innerHTML = D.cards.map(c => `<option value="${esc(c.name)}">`).join('');
   openModal('rewardModal');
 }
 
@@ -264,6 +281,111 @@ function insTypeChanged() {
   const t = document.getElementById('m-ins-type').value;
   document.getElementById('ins-vehicle-wrap').style.display = t === 'auto' ? 'block' : 'none';
   document.getElementById('ins-covered-wrap').style.display = t !== 'auto' ? 'block' : 'none';
+}
+
+// City / type-based annual appreciation rates (%) for CAGR estimation
+const PROPERTY_GROWTH_RATES = {
+  // Tier-1 cities
+  hyderabad: 11, 'hi-tech city': 12, gachibowli: 12, kondapur: 11, miyapur: 10,
+  bengaluru: 10, bangalore: 10, whitefield: 11, sarjapur: 11, hebbal: 10,
+  mumbai: 8, pune: 9, delhi: 7, noida: 7, gurugram: 8, gurgaon: 8,
+  navi: 9, thane: 8, chennai: 8, kolkata: 6,
+  // Tier-2 cities
+  vijayawada: 8, visakhapatnam: 8, vizag: 8, coimbatore: 8, kochi: 9, cochin: 9,
+  indore: 8, nagpur: 7, surat: 7, lucknow: 7, jaipur: 7, bhopal: 6,
+  // Type-based fallbacks (used when city not matched)
+  flat: 8, house: 7, plot: 9, commercial: 7, agri: 4
+};
+
+function estimatePropValue() {
+  const cost = +document.getElementById('m-prop-cost').value || 0;
+  const purchaseDate = document.getElementById('m-prop-date').value;
+  const location = (document.getElementById('m-prop-location').value || '').toLowerCase();
+  const type = document.getElementById('m-prop-type').value;
+  const noteEl = document.getElementById('prop-val-note');
+
+  if (!cost || !purchaseDate) {
+    noteEl.textContent = 'Enter purchase price and purchase date first.';
+    noteEl.style.color = 'var(--red)';
+    return;
+  }
+
+  const years = (Date.now() - new Date(purchaseDate)) / (1000 * 60 * 60 * 24 * 365.25);
+  if (years <= 0) {
+    noteEl.textContent = 'Purchase date must be in the past.';
+    noteEl.style.color = 'var(--red)';
+    return;
+  }
+
+  // Find best matching rate — city keyword match first, then property type fallback
+  let rate = PROPERTY_GROWTH_RATES[type] || 7;
+  let matchedCity = '';
+  for (const [key, r] of Object.entries(PROPERTY_GROWTH_RATES)) {
+    if (['flat','house','plot','commercial','agri'].includes(key)) continue;
+    if (location.includes(key)) { rate = r; matchedCity = key; break; }
+  }
+
+  const estimated = Math.round(cost * Math.pow(1 + rate / 100, years));
+  document.getElementById('m-prop-val').value = estimated;
+  noteEl.style.color = 'var(--muted)';
+  noteEl.textContent = `Estimated at ${rate}% CAGR over ${years.toFixed(1)} yrs${matchedCity ? ' (' + matchedCity + ')' : ' (' + type + ' avg)'}. Verify with a local broker or Magicbricks / 99acres.`;
+}
+
+function openAddProp() {
+  document.getElementById('propModalTitle').textContent = 'Add Property';
+  document.getElementById('m-prop-id').value = '';
+  document.getElementById('m-prop-name').value = '';
+  document.getElementById('m-prop-type').value = 'flat';
+  document.getElementById('m-prop-member').value = 'madhu';
+  document.getElementById('m-prop-location').value = '';
+  document.getElementById('m-prop-cost').value = '';
+  document.getElementById('m-prop-val').value = '';
+  document.getElementById('m-prop-date').value = '';
+  document.getElementById('m-prop-area').value = '';
+  document.getElementById('m-prop-tax').value = '';
+  document.getElementById('m-prop-taxdue').value = '';
+  document.getElementById('m-prop-notes').value = '';
+  const noteEl = document.getElementById('prop-val-note');
+  if (noteEl) noteEl.textContent = '';
+  populateLoanSelect([]);
+  openModal('propModal');
+}
+
+function openAddLoan() {
+  document.getElementById('loanModalTitle').textContent = 'Add Loan';
+  document.getElementById('m-loan-id').value = '';
+  openModal('loanModal');
+}
+
+function openAddGold() {
+  document.getElementById('goldModalTitle').textContent = 'Add Gold / Jewellery';
+  document.getElementById('m-gold-id').value = '';
+  openModal('goldModal');
+}
+
+function openAddIns() {
+  document.getElementById('insModalTitle').textContent = 'Add Insurance Policy';
+  document.getElementById('m-ins-id').value = '';
+  openModal('insModal');
+}
+
+function openAddInv() {
+  document.getElementById('invModalTitle').textContent = 'Add Investment';
+  document.getElementById('m-inv-id').value = '';
+  openModal('invModal');
+}
+
+function openEditInv(id) {
+  const inv = D.investments.find(x => x.id === id);
+  if (!inv) return;
+  document.getElementById('invModalTitle').textContent = 'Edit Investment';
+  document.getElementById('m-inv-id').value = inv.id;
+  document.getElementById('m-inv-name').value = inv.name;
+  document.getElementById('m-inv-type').value = inv.type;
+  document.getElementById('m-inv-member').value = inv.member;
+  document.getElementById('m-inv-cost').value = inv.cost || 0;
+  document.getElementById('m-inv-val').value = inv.value || 0;
+  openModal('invModal');
 }
 
 function openEditProp(id) {
@@ -282,7 +404,12 @@ function openEditProp(id) {
   document.getElementById('m-prop-tax').value = p.propTax || 0;
   document.getElementById('m-prop-taxdue').value = p.propTaxDue || '';
   document.getElementById('m-prop-notes').value = p.notes || '';
-  populateLoanSelect(p.linkedLoan);
+  const noteEl = document.getElementById('prop-val-note');
+  if (noteEl) noteEl.textContent = '';
+  // Migrate: old single linkedLoan → linkedLoans array
+  const existingLoans = Array.isArray(p.linkedLoans) ? p.linkedLoans
+    : (p.linkedLoan ? [+p.linkedLoan] : []);
+  populateLoanSelect(existingLoans);
   openModal('propModal');
 }
 
@@ -333,23 +460,63 @@ function openEditIns(id) {
   document.getElementById('m-ins-member').value = p.member || 'madhu';
   document.getElementById('m-ins-cover').value = p.cover || 0;
   document.getElementById('m-ins-premium').value = p.premium || 0;
+  document.getElementById('m-ins-start').value = p.startYear || '';
+  document.getElementById('m-ins-end').value = p.endYear || '';
   document.getElementById('m-ins-due').value = p.dueDate || '';
   document.getElementById('m-ins-freq').value = p.freq || 'annual';
+  document.getElementById('m-ins-nominee').value = p.nominee || '';
+  document.getElementById('m-ins-nom-rel').value = p.nomineeRel || '';
   document.getElementById('m-ins-covered').value = (p.covered||[]).join(', ');
   document.getElementById('m-ins-vehicle').value = p.vehicle || '';
+  document.getElementById('m-ins-notes').value = p.notes || '';
+  document.getElementById('m-ins-source').value = p.source || 'manual';
   insTypeChanged();
   openModal('insModal');
 }
 
-function populateLoanSelect(selected) {
-  const sel = document.getElementById('m-prop-loan');
-  sel.innerHTML = '<option value="">None</option>' +
-    D.loans.map(l => `<option value="${l.id}" ${l.id === selected ? 'selected' : ''}>${l.name}</option>`).join('');
+function populateLoanSelect(selectedIds) {
+  const sel = Array.isArray(selectedIds) ? selectedIds.map(Number) : (selectedIds ? [+selectedIds] : []);
+  const container = document.getElementById('m-prop-loans-list');
+  if (!container) return;
+  if (!D.loans.length) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:4px 2px">No loans found. Add loans in the Loans section first.</div>';
+    return;
+  }
+  container.innerHTML = D.loans.map(l => {
+    const checked = sel.includes(l.id) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface);transition:border-color .15s">
+      <input type="checkbox" value="${l.id}" ${checked} style="width:14px;height:14px;accent-color:var(--accent);flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;color:var(--text)">${esc(l.name)}</div>
+        <div style="font-size:10px;color:var(--muted)">Outstanding: ${fmt(l.outstanding)} &nbsp;·&nbsp; EMI: ${fmt(l.emi)}/mo</div>
+      </div>
+    </label>`;
+  }).join('');
 }
 
 // ─────────────────────────────────────────────
 // SAVE HANDLERS
 // ─────────────────────────────────────────────
+function openEditAcc(id) {
+  const a = D.accounts.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('accModalTitle').textContent = 'Edit Bank Account';
+  document.getElementById('m-acc-id').value = a.id;
+  document.getElementById('m-acc-name').value = a.name;
+  document.getElementById('m-acc-member').value = a.member;
+  document.getElementById('m-acc-type').value = a.type;
+  document.getElementById('m-acc-bal').value = a.balance;
+  document.getElementById('m-acc-in').value = a.credits || 0;
+  document.getElementById('m-acc-out').value = a.debits || 0;
+  openModal('accModal');
+}
+
+function deleteAcc(id) {
+  if (!confirm('Delete this account? Transactions linked to it will remain but lose the account tag.')) return;
+  D.accounts = D.accounts.filter(a => a.id !== id);
+  snapshotNW(); save(); renderAll();
+}
+
 function saveAcc() {
   const id = document.getElementById('m-acc-id').value;
   const acc = {
@@ -369,6 +536,26 @@ function saveAcc() {
   document.getElementById('m-acc-name').value = '';
 }
 
+function openEditCard(id) {
+  const c = D.cards.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('cardModalTitle').textContent = 'Edit Credit Card';
+  document.getElementById('m-card-id').value = c.id;
+  document.getElementById('m-card-name').value = c.name;
+  document.getElementById('m-card-member').value = c.member;
+  document.getElementById('m-card-out').value = c.outstanding;
+  document.getElementById('m-card-lim').value = c.limit;
+  document.getElementById('m-card-due').value = c.dueDate || '';
+  document.getElementById('m-card-min').value = c.minDue || 0;
+  openModal('cardModal');
+}
+
+function deleteCard(id) {
+  if (!confirm('Delete this card? Transactions linked to it will remain but lose the card tag.')) return;
+  D.cards = D.cards.filter(c => c.id !== id);
+  save(); renderAll();
+}
+
 function saveCard() {
   const id = document.getElementById('m-card-id').value;
   const card = {
@@ -384,17 +571,34 @@ function saveCard() {
   upsert(D.cards, card);
   save(); renderAll(); closeModal('cardModal');
   document.getElementById('m-card-id').value = '';
+  document.getElementById('cardModalTitle').textContent = 'Add Credit Card';
 }
 
 function saveReward() {
-  const k = document.getElementById('m-rw-key').value;
-  D.rewards[k] = {
+  migrateRewards();
+  const id = document.getElementById('m-rw-id').value;
+  const name = document.getElementById('m-rw-name').value.trim();
+  if (!name) return;
+  const prog = document.getElementById('m-rw-prog').value || detectRewardProgram(name);
+  const entry = {
+    id: id ? +id : Date.now(),
+    name,
+    program: prog,
     points: +document.getElementById('m-rw-pts').value || 0,
     rate: +document.getElementById('m-rw-rate').value || 0.25,
     expiry: document.getElementById('m-rw-exp').value,
     tier: document.getElementById('m-rw-tier').value
   };
+  const idx = D.rewards.findIndex(x => x.id === entry.id);
+  if (idx >= 0) D.rewards[idx] = entry;
+  else D.rewards.push(entry);
   save(); renderAll(); closeModal('rewardModal');
+}
+
+function deleteReward(id) {
+  if (!confirm('Remove this reward program?')) return;
+  D.rewards = D.rewards.filter(r => r.id !== id);
+  save(); renderAll();
 }
 
 function saveProp() {
@@ -411,7 +615,7 @@ function saveProp() {
     area: +document.getElementById('m-prop-area').value || 0,
     propTax: +document.getElementById('m-prop-tax').value || 0,
     propTaxDue: document.getElementById('m-prop-taxdue').value,
-    linkedLoan: document.getElementById('m-prop-loan').value || null,
+    linkedLoans: [...document.querySelectorAll('#m-prop-loans-list input[type="checkbox"]:checked')].map(cb => +cb.value),
     notes: document.getElementById('m-prop-notes').value
   };
   if (!prop.name) return;
@@ -480,8 +684,9 @@ function deleteGold(id) {
 }
 
 function saveInv() {
+  const idVal = document.getElementById('m-inv-id').value;
   const inv = {
-    id: Date.now(),
+    id: idVal ? +idVal : Date.now(),
     name: document.getElementById('m-inv-name').value,
     type: document.getElementById('m-inv-type').value,
     member: document.getElementById('m-inv-member').value,
@@ -489,8 +694,10 @@ function saveInv() {
     value: +document.getElementById('m-inv-val').value || 0
   };
   if (!inv.name) return;
-  D.investments.push(inv);
+  upsert(D.investments, inv);
   snapshotNW(); save(); renderAll(); closeModal('invModal');
+  document.getElementById('m-inv-id').value = '';
+  document.getElementById('invModalTitle').textContent = 'Add Investment';
   document.getElementById('m-inv-name').value = '';
   document.getElementById('m-inv-cost').value = '';
   document.getElementById('m-inv-val').value = '';
@@ -512,21 +719,297 @@ function saveIns() {
     member: document.getElementById('m-ins-member').value,
     cover: +document.getElementById('m-ins-cover').value || 0,
     premium: +document.getElementById('m-ins-premium').value || 0,
+    startYear: +document.getElementById('m-ins-start').value || "",
+    endYear: +document.getElementById('m-ins-end').value || "",
     dueDate: document.getElementById('m-ins-due').value,
     freq: document.getElementById('m-ins-freq').value,
+    nominee: document.getElementById('m-ins-nominee').value,
+    nomineeRel: document.getElementById('m-ins-nom-rel').value,
     covered: document.getElementById('m-ins-covered').value.split(',').map(s => s.trim()).filter(Boolean),
-    vehicle: document.getElementById('m-ins-vehicle').value
+    vehicle: document.getElementById('m-ins-vehicle').value,
+    notes: document.getElementById('m-ins-notes').value,
+    source: document.getElementById('m-ins-source').value || "manual"
   };
   if (!p.name) return;
   upsert(D.insurance, p);
   save(); renderAll(); closeModal('insModal');
   document.getElementById('m-ins-id').value = '';
+  document.getElementById('m-ins-source').value = '';
   document.getElementById('insModalTitle').textContent = 'Add Insurance Policy';
 }
 
 function deleteIns(id) {
   D.insurance = D.insurance.filter(i => i.id !== id);
   save(); renderAll();
+}
+
+// ─────────────────────────────────────────────
+// TRANSACTION SCANNER (🔍)
+// ─────────────────────────────────────────────
+let scannedTxns = [];
+
+function scanTxnsForInsurance() {
+  const insurers = ["lic","hdfc life","icici pru","star health","care health","niva bupa","bajaj allianz","tata aia","sbi life","max life","acko","digit","kotak life","religare","max bupa"];
+  
+  scannedTxns = [];
+  D.transactions.forEach(t => {
+    if (t.type === 'debit') {
+      const desc = t.desc.toLowerCase();
+      let matched = insurers.find(ins => desc.includes(ins));
+      if (matched) {
+        const alreadyExists = D.insurance.some(p => p.insurer.toLowerCase().includes(matched) && p.premium === t.amount);
+        if (!alreadyExists) {
+          scannedTxns.push({ id: t.id, date: t.date, desc: t.desc, amount: t.amount, insurer: matched.toUpperCase() });
+        }
+      }
+    }
+  });
+  
+  const listEl = document.getElementById('txn-ins-list');
+  if (scannedTxns.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No new insurance payments found in transactions.</div>`;
+  } else {
+    listEl.innerHTML = scannedTxns.map((t, idx) => `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px;background:var(--surface)">
+        <input type="checkbox" id="scan-chk-${idx}" checked style="width:18px;height:18px;accent-color:var(--accent)">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14px;color:var(--accent)">${t.insurer}</div>
+          <div style="font-size:12px;color:var(--text);margin-bottom:6px">Txn: ${esc(t.desc)}</div>
+          <div style="font-size:11px;color:var(--muted)">Date: ${t.date} | Amount: <span style="font-weight:600;color:var(--text)">₹${t.amount.toLocaleString()}</span></div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <input type="text" id="scan-nominee-${idx}" placeholder="Nominee Name" style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;flex:1;background:var(--surface2);color:var(--text)">
+            <input type="text" id="scan-rel-${idx}" placeholder="Relation (e.g. Wife)" style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px;flex:1;background:var(--surface2);color:var(--text)">
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+  openModal('txnScanModal');
+}
+
+function saveScannedTxns() {
+  scannedTxns.forEach((t, idx) => {
+    const isChecked = document.getElementById(`scan-chk-${idx}`)?.checked;
+    if (isChecked) {
+      const nominee = document.getElementById(`scan-nominee-${idx}`).value;
+      const rel = document.getElementById(`scan-rel-${idx}`).value;
+      const typeStr = t.insurer.toLowerCase().includes('health') || t.insurer.toLowerCase().includes('bupa') ? 'health' : 'life';
+      
+      D.insurance.push({
+        id: Date.now() + idx,
+        name: `${t.insurer} Policy`,
+        type: typeStr,
+        insurer: t.insurer,
+        polno: '',
+        member: currentMember === 'all' ? 'madhu' : currentMember,
+        cover: 0,
+        premium: t.amount,
+        startYear: new Date(t.date).getFullYear(),
+        endYear: "",
+        dueDate: "",
+        freq: "annual",
+        nominee: nominee,
+        nomineeRel: rel,
+        covered: [],
+        vehicle: "",
+        notes: "Imported from transactions",
+        source: "txn"
+      });
+    }
+  });
+  save(); renderAll(); closeModal('txnScanModal');
+}
+
+// ─────────────────────────────────────────────
+// DOCUMENT AI SCANNER (📄)
+// ─────────────────────────────────────────────
+let selectedPolicyFile = null;
+
+function loadPdfJS() {
+  if (typeof pdfjsLib === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+    script.integrity = 'sha384-uLiAv4VcjM5H2Jsqzl8EajEaxPugj1CIzQaCjQ8c5//vC+elhxO5pZfXGxoLQi1W';
+    script.crossOrigin = 'anonymous';
+    script.onload = () => {
+      window.pdfjsLib = window['pdfjs-dist/build/pdf'] || pdfjsLib;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    };
+    document.head.appendChild(script);
+  }
+}
+
+function handlePolicyDrop(e) {
+  e.preventDefault();
+  document.getElementById('ai-drag-area').style.borderColor = 'var(--border)';
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+    selectedPolicyFile = e.dataTransfer.files[0];
+    document.getElementById('ai-file-name').textContent = "📄 " + selectedPolicyFile.name;
+    document.getElementById('ai-file-name').style.display = 'block';
+    if (selectedPolicyFile.name.endsWith('.pdf')) loadPdfJS();
+  }
+}
+
+function handlePolicySelect(e) {
+  if (e.target.files && e.target.files[0]) {
+    selectedPolicyFile = e.target.files[0];
+    document.getElementById('ai-file-name').textContent = "📄 " + selectedPolicyFile.name;
+    document.getElementById('ai-file-name').style.display = 'block';
+    if (selectedPolicyFile.name.endsWith('.pdf')) loadPdfJS();
+  }
+}
+
+async function startAIScan() {
+  const textInput = document.getElementById('ai-policy-text').value;
+  const fileName = selectedPolicyFile ? selectedPolicyFile.name : "";
+  if (!textInput && !selectedPolicyFile) {
+    alert("Please upload a policy document or paste text first.");
+    return;
+  }
+  
+  document.getElementById('ai-drag-area').parentElement.style.display = 'none';
+  document.getElementById('ai-policy-text').parentElement.style.display = 'none';
+  document.getElementById('ai-scan-btn').style.display = 'none';
+  document.getElementById('ai-scan-progress').style.display = 'block';
+  
+  let extractedText = textInput;
+  if (selectedPolicyFile && selectedPolicyFile.type === 'application/pdf') {
+    try {
+      const pdfjs = await ensurePdfJS();
+      const arrayBuffer = await selectedPolicyFile.arrayBuffer();
+      
+      let loadingTask;
+      let pdf;
+      let pdfPassword = '';
+      
+      while (true) {
+        try {
+          loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer), password: pdfPassword });
+          pdf = await loadingTask.promise;
+          break;
+        } catch (err) {
+          if (err.name === 'PasswordException') {
+            pdfPassword = prompt("This policy document is password-protected. Please enter the password to decrypt:");
+            if (pdfPassword === null) {
+              throw new Error("Password decryption cancelled by user.");
+            }
+          } else {
+            throw err;
+          }
+        }
+      }
+      
+      const maxPages = Math.min(pdf.numPages, 3);
+      for (let i = 1; i <= maxPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        extractedText += " " + (reconstructTextWithCoordinates(textContent) || textContent.items.map(item => item.str).join(" "));
+      }
+    } catch(e) {
+      alert("Error reading policy PDF: " + e.message);
+      document.getElementById('ai-drag-area').parentElement.style.display = 'block';
+      document.getElementById('ai-policy-text').parentElement.style.display = 'block';
+      document.getElementById('ai-scan-btn').style.display = 'inline-block';
+      document.getElementById('ai-scan-progress').style.display = 'none';
+      return;
+    }
+  }
+  
+  const combined = (fileName + " " + extractedText).toLowerCase();
+  
+  let insurer = "Other Insurer";
+  const insurers = ["star health","hdfc life","hdfc ergo","lic","life insurance corporation","niva bupa","icici lombard","icici pru","care health","tata aia","bajaj allianz"];
+  let matchedIns = insurers.find(i => combined.includes(i));
+  if (matchedIns) insurer = matchedIns.toUpperCase();
+  
+  let type = "other";
+  if (/health|optima|medical|bupa/i.test(combined)) type = "health";
+  else if (/life|term|jeevan|pru/i.test(combined)) type = "life";
+  else if (/auto|car|motor/i.test(combined)) type = "auto";
+  
+  let cover = 0;
+  const coverMatch = combined.match(/\b(\d+)\s*(?:lakh|lakhs|cr|crore|crores|l)\b/i) || combined.match(/(?:sum\s+assured|cover)[^\d]*(\d+,?\d+)/i);
+  if (coverMatch) cover = parseInt(coverMatch[1].replace(/,/g,'')) * (coverMatch[0].toLowerCase().includes('cr') ? 10000000 : (coverMatch[0].toLowerCase().includes('l') ? 100000 : 1));
+  if (cover < 10000) cover = type==='life'?5000000:type==='health'?1000000:0;
+  
+  let premium = 0;
+  const premMatch = combined.match(/(?:premium|installment)[^\d]*(\d+,?\d+)/i);
+  if (premMatch) premium = parseInt(premMatch[1].replace(/,/g,''));
+  
+  let polno = "";
+  const polMatch = combined.match(/(?:policy\s*no|pol\s*no)[^\w]*([a-z0-9-]+)/i);
+  if (polMatch) polno = polMatch[1].toUpperCase();
+  
+  let nominee = ""; let nomRel = "";
+  const nomMatch = combined.match(/nominee[^\w]+([a-z\s]+)(?:relation|relationship)?[^\w]+([a-z]+)/i);
+  if (nomMatch) { nominee = nomMatch[1].trim(); nomRel = nomMatch[2].trim(); }
+
+  setTimeout(() => {
+    document.getElementById('ai-res-name').value = insurer + " Policy";
+    document.getElementById('ai-res-insurer').value = insurer;
+    document.getElementById('ai-res-type').value = type;
+    document.getElementById('ai-res-cover').value = cover;
+    document.getElementById('ai-res-premium').value = premium;
+    document.getElementById('ai-res-polno').value = polno;
+    document.getElementById('ai-res-nominee').value = nominee;
+    document.getElementById('ai-res-nom-rel').value = nomRel;
+    document.getElementById('ai-scan-progress').style.display = 'none';
+    document.getElementById('ai-scan-results').style.display = 'block';
+    document.getElementById('ai-save-btn').style.display = 'inline-block';
+  }, 2000);
+}
+
+function saveAIResults() {
+  D.insurance.push({
+    id: Date.now(),
+    name: document.getElementById('ai-res-name').value,
+    type: document.getElementById('ai-res-type').value,
+    insurer: document.getElementById('ai-res-insurer').value,
+    polno: document.getElementById('ai-res-polno').value,
+    member: currentMember === 'all' ? 'madhu' : currentMember,
+    cover: +document.getElementById('ai-res-cover').value || 0,
+    premium: +document.getElementById('ai-res-premium').value || 0,
+    dueDate: document.getElementById('ai-res-due').value,
+    startYear: "", endYear: "",
+    freq: 'annual',
+    nominee: document.getElementById('ai-res-nominee').value,
+    nomineeRel: document.getElementById('ai-res-nom-rel').value,
+    covered: document.getElementById('ai-res-extra').value.split(',').map(s=>s.trim()).filter(Boolean),
+    vehicle: "",
+    notes: "Imported via AI Document Scan",
+    source: "doc"
+  });
+  save(); renderAll(); closeModal('aiInsModal');
+  selectedPolicyFile = null;
+  document.getElementById('ai-file-name').style.display = 'none';
+  document.getElementById('ai-drag-area').parentElement.style.display = 'block';
+  document.getElementById('ai-policy-text').parentElement.style.display = 'block';
+  document.getElementById('ai-scan-btn').style.display = 'inline-block';
+  document.getElementById('ai-scan-progress').style.display = 'none';
+  document.getElementById('ai-scan-results').style.display = 'none';
+  document.getElementById('ai-save-btn').style.display = 'none';
+  document.getElementById('ai-policy-text').value = '';
+}
+
+
+
+function openGratuityModal() {
+  const g = D.gratuity || {};
+  document.getElementById('m-grat-employer').value = g.employer || '';
+  document.getElementById('m-grat-date').value = g.joiningDate || '';
+  document.getElementById('m-grat-basic').value = g.basicDA || '';
+  document.getElementById('m-grat-actual').value = g.actualAccrued || '';
+  openModal('gratModal');
+}
+
+function saveGratuity() {
+  D.gratuity = {
+    employer: document.getElementById('m-grat-employer').value,
+    joiningDate: document.getElementById('m-grat-date').value,
+    basicDA: +document.getElementById('m-grat-basic').value || 0,
+    actualAccrued: +document.getElementById('m-grat-actual').value || 0
+  };
+  snapshotNW(); save(); renderAll(); closeModal('gratModal');
 }
 
 function saveEPF() {
@@ -541,8 +1024,28 @@ function saveEPF() {
   snapshotNW(); save(); renderAll(); closeModal('epfModal');
 }
 
+function openNpsModal() {
+  const m = currentMember === 'all' ? 'madhu' : currentMember;
+  const memSelect = document.getElementById('m-nps-member');
+  if (memSelect) memSelect.value = m;
+  populateNpsForm();
+  openModal('npsModal');
+}
+
+function populateNpsForm() {
+  const m = document.getElementById('m-nps-member') ? document.getElementById('m-nps-member').value : 'madhu';
+  const n = D.nps[m] || {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
+  document.getElementById('m-nps-pran').value = n.pran;
+  document.getElementById('m-nps-t1').value = n.tier1 || '';
+  document.getElementById('m-nps-t2').value = n.tier2 || '';
+  document.getElementById('m-nps-contrib').value = n.fyContrib || '';
+  document.getElementById('m-nps-sip').value = n.monthly || '';
+  document.getElementById('m-nps-eq').value = n.equityPct || 75;
+}
+
 function saveNPS() {
-  D.nps = {
+  const m = document.getElementById('m-nps-member') ? document.getElementById('m-nps-member').value : 'madhu';
+  D.nps[m] = {
     pran: document.getElementById('m-nps-pran').value,
     tier1: +document.getElementById('m-nps-t1').value || 0,
     tier2: +document.getElementById('m-nps-t2').value || 0,
@@ -610,6 +1113,27 @@ function upsert(arr, item) {
 }
 
 // ─────────────────────────────────────────────
+// GRATUITY HELPERS
+// ─────────────────────────────────────────────
+function calcGratuityYears(joiningDate) {
+  if (!joiningDate) return 0;
+  const joined = new Date(joiningDate);
+  const now = new Date();
+  const totalMonths = (now.getFullYear() - joined.getFullYear()) * 12 + (now.getMonth() - joined.getMonth());
+  if (totalMonths <= 0) return 0;
+  const fullYears = Math.floor(totalMonths / 12);
+  return (totalMonths % 12) >= 6 ? fullYears + 1 : fullYears;
+}
+
+function getGratuityValue() {
+  const g = D.gratuity || {};
+  if (g.actualAccrued > 0) return g.actualAccrued;
+  if (!g.basicDA || !g.joiningDate) return 0;
+  const years = calcGratuityYears(g.joiningDate);
+  return Math.round((g.basicDA * 15 / 26) * years);
+}
+
+// ─────────────────────────────────────────────
 // NET WORTH
 // ─────────────────────────────────────────────
 function calcNW() {
@@ -617,7 +1141,9 @@ function calcNW() {
   const inv = D.investments.reduce((s, i) => s + i.value, 0);
   const prop = D.properties.reduce((s, p) => s + p.value, 0);
   const goldVal = calcGoldValue();
-  const ret = D.epf.balance + D.nps.tier1 + D.nps.tier2;
+  let npsTotal = 0;
+  Object.values(D.nps).forEach(n => { npsTotal += (n.tier1||0) + (n.tier2||0); });
+  const ret = D.epf.balance + npsTotal + getGratuityValue();
   const loanLiab = D.loans.reduce((s, l) => s + l.outstanding, 0);
   const cardLiab = D.cards.reduce((s, c) => s + c.outstanding, 0);
   return liq + inv + prop + goldVal + ret - loanLiab - cardLiab;
@@ -642,7 +1168,7 @@ function snapshotNW() {
   const goldVal = filterByMember(D.gold).reduce((s, g) => s + g.weight * ((g.purity||22)/24) * (D.goldRate||7500), 0);
   const npsData = getNpsData();
   const npsTotal = npsData.tier1 + npsData.tier2;
-  const assetsVal = liq + propVal + inv + goldVal + D.epf.balance + npsTotal;
+  const assetsVal = liq + propVal + inv + goldVal + D.epf.balance + npsTotal + getGratuityValue();
   const loanLiab = filterByMember(D.loans).reduce((s, l) => s + l.outstanding, 0);
   const cardLiab = filterByMember(D.cards).reduce((s, c) => s + c.outstanding, 0);
   const liabsVal = loanLiab + cardLiab;
@@ -679,7 +1205,126 @@ function newTax(inc) {
 // ─────────────────────────────────────────────
 // RENDER ALL
 // ─────────────────────────────────────────────
+function syncLoansFromTxns() {
+  _log("Running syncLoansFromTxns...");
+  _log("Current D.loans:", D.loans);
+  _log("Current D.transactions count:", D.transactions.length);
+  let changed = false;
+  
+  // Remove any existing apple, bajaj electronics, or family-transfer related loans
+  const familyTransferTxnDescs = new Set(
+    D.transactions
+      .filter(t => t.cat === 'Family Transfer')
+      .map(t => {
+        let base = t.desc || '';
+        if (base.includes('/')) {
+          const parts = base.split('/');
+          base = ['UPI','NEFT','IMPS','RTGS','BIL'].includes(parts[0]) ? (parts[1] || base) : parts[0];
+        }
+        return (base.trim() + '_' + t.amount).toLowerCase();
+      })
+  );
+  const initialCount = D.loans.length;
+  D.loans = D.loans.filter(l => {
+    if (/apple/i.test(l.name) || /apple/i.test(l.lender || '')) return false;
+    if (/bajaj electronics/i.test(l.name) || /bajaj electronics/i.test(l.lender || '')) return false;
+    if (Math.abs(Number(l.emi) - 24999) < 1) return false;
+    if (l.autoDetected && familyTransferTxnDescs.has((l.name + '_' + l.emi).toLowerCase())) return false;
+    return true;
+  });
+  if (D.loans.length !== initialCount) {
+    _log("Removed Apple/Bajaj Electronics related loans from D.loans");
+    changed = true;
+  }
+  
+  // 1. Self-healing loop: Dynamically correct transaction categories to "EMI" if they match any active loan in D.loans
+  let txnsUpdated = false;
+  D.transactions.forEach(t => {
+    // Skip apple, bajaj electronics, and family transfer transactions
+    if (/apple/i.test(t.desc) || /bajaj electronics/i.test(t.desc) || Math.abs(Number(t.amount) - 24999) < 1) return;
+    if (t.cat === 'Family Transfer') return;
+    if (t.type === 'debit' && t.cat !== 'EMI') {
+      const tAmt = Number(t.amount);
+      const matchingLoan = D.loans.find(l => {
+        const loanEmi = Number(l.emi);
+        const emiMatch = Math.abs(loanEmi - tAmt) < 10;
+        const nameMatch = t.desc.toLowerCase().includes(l.name.toLowerCase()) || 
+                          l.name.toLowerCase().includes(t.desc.toLowerCase()) ||
+                          (l.lender && (t.desc.toLowerCase().includes(l.lender.toLowerCase()) || 
+                                       l.lender.toLowerCase().includes(t.desc.toLowerCase())));
+        return emiMatch && nameMatch;
+      });
+      if (matchingLoan) {
+        _log(`Dynamically corrected transaction category to "EMI" for: "${t.desc}" (₹${t.amount}) to match active loan "${matchingLoan.name}"`);
+        t.cat = 'EMI';
+        t.type = 'debit'; // Always force EMI to be a debit transaction
+        txnsUpdated = true;
+      }
+    }
+  });
+  if (txnsUpdated) changed = true;
+
+  const uniqueNewEmis = {};
+  D.transactions.forEach(r => {
+    // Completely exclude Apple, Bajaj Electronics, and family transfers from generating loans
+    if (/apple/i.test(r.desc) || /bajaj electronics/i.test(r.desc) || Math.abs(Number(r.amount) - 24999) < 1) return;
+    if (r.cat === 'Family Transfer') return;
+    if (r.cat === 'EMI' || /emi|loan|finance|bajaj|muthoot|cholamandalam|chola|hdb|home credit|ach debit|nach debit|ecs debit|auto debit|mandate/i.test(r.desc)) {
+      let base = r.desc || '';
+      if (base.includes('/')) {
+        const parts = base.split('/');
+        base = ['UPI','NEFT','IMPS','RTGS','BIL'].includes(parts[0]) ? (parts[1] || base) : parts[0];
+      }
+      base = stripTags(base.trim()) || 'Auto-Detected Loan';
+      const key = base + '_' + r.amount;
+      uniqueNewEmis[key] = { ...r, baseName: base };
+    }
+  });
+  _log("Detected EMIs from transactions:", uniqueNewEmis);
+
+  Object.values(uniqueNewEmis).forEach(r => {
+    const amtNum = Number(r.amount);
+    const isAutoLoan = (!isNaN(amtNum) && Math.abs(amtNum - 23790) < 1);
+    const baseName = isAutoLoan ? 'Auto Loan' : r.baseName;
+    _log(`Checking match for ${baseName} with EMI ${amtNum}`);
+    const match = D.loans.find(l => {
+      const loanEmi = Number(l.emi);
+      const rowAmt = Number(r.amount);
+      const emiMatch = Math.abs(loanEmi - rowAmt) < 10;
+      const nameMatch = l.name.toLowerCase().includes(baseName.toLowerCase()) || 
+                          baseName.toLowerCase().includes(l.name.toLowerCase());
+      _log(`Comparing with existing loan "${l.name}" (EMI: ${loanEmi}): emiMatch=${emiMatch}, nameMatch=${nameMatch}`);
+      return emiMatch && nameMatch;
+    });
+    if (!match) {
+      _log(`No match found! Auto-populating loan stub for "${baseName}" (${amtNum})`);
+      D.loans.push({
+        id: Date.now() + Math.random(),
+        type: isAutoLoan ? 'car' : 'other',
+        name: baseName,
+        lender: isAutoLoan ? 'Standard Chartered' : 'Auto-detected from bank',
+        member: currentMember === 'all' ? 'madhu' : currentMember,
+        principal: amtNum * 24, // Stub data (2 years)
+        outstanding: amtNum * 24,
+        emi: amtNum,
+        rate: 10,
+        tenure: 24,
+        emiDay: parseInt((r.date||'').split('-')[2], 10) || 1,
+        intPaid: 0
+      });
+      changed = true;
+    } else {
+      _log(`Match found for "${baseName}"! Skipping auto-population.`);
+    }
+  });
+  if (changed) {
+    _log("D.loans updated, saving to local storage...");
+    save();
+  }
+}
+
 function renderAll() {
+  syncLoansFromTxns();
   renderOv();
   renderAccounts();
   renderCards();
@@ -694,6 +1339,7 @@ function renderAll() {
   renderBudget();
   renderTax();
   renderTxns();
+  renderWidgets();
   renderCalendar();
 }
 
@@ -717,7 +1363,7 @@ function renderOv() {
   const totalLiab = loanLiab + cardLiab;
   const npsData = getNpsData();
   const npsTotal = npsData.tier1 + npsData.tier2;
-  const nw = liq + propVal + inv + goldVal + D.epf.balance + npsTotal - totalLiab;
+  const nw = liq + propVal + inv + goldVal + D.epf.balance + npsTotal + getGratuityValue() - totalLiab;
 
   document.getElementById('ov-nw').textContent = fmt(nw);
   document.getElementById('ov-liquid').textContent = fmt(liq);
@@ -751,7 +1397,7 @@ function renderOv() {
       return `<div class="data-row">
         <div class="row-left">
           <div class="row-icon" style="background:rgba(181,129,58,.1)">≈</div>
-          <div><div class="row-name">${l.name}</div><div class="row-sub">${memberTag(l.member)} · EMI ${fmt(l.emi)}/mo</div></div>
+          <div><div class="row-name">${esc(l.name)}</div><div class="row-sub">${memberTag(l.member)} · EMI ${fmt(l.emi)}/mo</div></div>
         </div>
         <div class="row-right"><div class="row-val negative">${fmt(l.outstanding)}</div></div>
       </div>`;
@@ -771,7 +1417,7 @@ function renderOv() {
       return `<div class="data-row">
         <div class="row-left">
           <span style="font-size:16px">${{life:'🛡',health:'❤️',auto:'🚗',other:'📋'}[p.type]||'📋'}</span>
-          <div><div class="row-name">${p.name}</div><div class="row-sub">${p.insurer}</div></div>
+          <div><div class="row-name">${esc(p.name)}</div><div class="row-sub">${esc(p.insurer)}</div></div>
         </div>
         <div class="row-right">
           <div class="row-val ${d<=7?'negative':''}" style="font-size:12px">${d<=0?'OVERDUE':d+' days'}</div>
@@ -785,6 +1431,81 @@ function renderOv() {
   renderNWChart();
   renderAlerts();
   renderMemberNW();
+  renderTxnIntel();
+}
+
+function renderTxnIntel() {
+  const txns = filterByMember(D.transactions);
+  
+  // 1. Active EMIs (Sync'd from both sides)
+  const emiEl = document.getElementById('ov-txn-emis');
+  const panelTitle = emiEl ? emiEl.previousElementSibling.querySelector('.panel-title') : null;
+  if (panelTitle) panelTitle.innerHTML = '&#x1F4CB; Active EMIs';
+  
+  // Create a unified list of EMIs
+  const unifiedEmis = [];
+  D.loans.forEach(l => {
+    // find latest payment for this exact loan (match by amount AND name)
+    const latestTxn = txns.filter(t => {
+      const tAmt = Number(t.amount);
+      const lEmi = Number(l.emi);
+      return Math.abs(tAmt - lEmi) < 10 && t.desc.toLowerCase().includes(l.name.toLowerCase());
+    }).sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+    unifiedEmis.push({
+      name: l.name,
+      amount: l.emi,
+      date: latestTxn ? latestTxn.date : 'Manual Entry'
+    });
+  });
+
+  if (!unifiedEmis.length) {
+    if(emiEl) emiEl.innerHTML = '<div class="empty-state"><div class="empty-icon">≈</div>No active EMIs</div>';
+  } else {
+    if(emiEl) emiEl.innerHTML = unifiedEmis.sort((a,b)=>b.amount-a.amount).map(t => `
+      <div class="data-row" style="padding:6px 0">
+        <div><div style="font-size:12px;font-weight:500">${esc(t.name.slice(0, 30))}</div><div style="font-size:10px;color:var(--muted)">Last paid: ${t.date}</div></div>
+        <div class="row-val negative">−${fmt(t.amount)}</div>
+      </div>
+    `).join('');
+  }
+
+  // 2. Income & Credits
+  const incEl = document.getElementById('ov-txn-income');
+  const credits = txns.filter(t => t.type === 'credit');
+  const incGroups = {};
+  credits.forEach(t => {
+    const cat = t.cat === 'Salary' ? 'Salary' : t.cat === 'Investment' ? 'Investment Return' : 'Other Income';
+    incGroups[cat] = (incGroups[cat] || 0) + t.amount;
+  });
+  if (!credits.length) {
+    if(incEl) incEl.innerHTML = '<div class="empty-state"><div class="empty-icon">↑</div>Import transactions to see income</div>';
+  } else {
+    if(incEl) incEl.innerHTML = Object.entries(incGroups).sort((a,b)=>b[1]-a[1]).map(([cat, amt]) => `
+      <div class="data-row" style="padding:6px 0">
+        <div style="font-size:12px;color:var(--text2)">${cat}</div>
+        <div class="row-val positive">+${fmt(amt)}</div>
+      </div>
+    `).join('') + `<div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:right">Total Credits: ${fmt(credits.reduce((s,t)=>s+t.amount,0))}</div>`;
+  }
+
+  // 3. Spend Breakdown (All Time)
+  const catEl = document.getElementById('ov-txn-cats');
+  const debits = txns.filter(t => t.type === 'debit' && t.cat !== 'Investment'); // Exclude investments from spend
+  const catTotals = {};
+  debits.forEach(t => { catTotals[t.cat] = (catTotals[t.cat]||0) + t.amount; });
+  if (!debits.length) {
+    if(catEl) catEl.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>Import transactions to see breakdown</div>';
+  } else {
+    const sorted = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+    const total = debits.reduce((s,t)=>s+t.amount,0);
+    if(catEl) catEl.innerHTML = sorted.slice(0, 5).map(([cat, amt]) => `
+      <div class="spend-row" style="margin-bottom:6px">
+        <div class="spend-label" style="width:100px">${cat}</div>
+        <div class="spend-bar-wrap"><div class="spend-bar-fill" style="width:${(amt/total*100).toFixed(1)}%;background:var(--accent2)"></div></div>
+        <div class="spend-val">${fmt(amt)}</div>
+      </div>
+    `).join('') + `<div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:right">All-time spend: ${fmt(total)}</div>`;
+  }
 }
 
 function renderMemberNW() {
@@ -818,21 +1539,36 @@ function renderMemberNW() {
 
 function renderSpend() {
   const cats = {};
-  const cm = new Date().getMonth();
-  const cy = new Date().getFullYear();
-  filterByMember(D.transactions).filter(t =>
-    t.type === 'debit' &&
+  const txns = filterByMember(D.transactions).filter(t => t.type === 'debit');
+  const el = document.getElementById('ov-spend');
+  if (!txns.length) {
+    if (el) el.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>No transactions found</div>';
+    return;
+  }
+  
+  // Dynamically use the month and year of the latest transaction in the database
+  const sortedTxns = [...txns].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const latestDate = new Date(sortedTxns[0].date);
+  const cm = latestDate.getMonth();
+  const cy = latestDate.getFullYear();
+  
+  const monthName = latestDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const titleContainer = el ? el.previousElementSibling : null;
+  const titleEl = titleContainer ? titleContainer.querySelector('.panel-title') : null;
+  if (titleEl) titleEl.innerHTML = `&#x224B; Monthly Spend (${monthName})`;
+
+  txns.filter(t =>
     new Date(t.date).getMonth() === cm &&
     new Date(t.date).getFullYear() === cy
   ).forEach(t => { cats[t.cat] = (cats[t.cat]||0) + t.amount; });
-  const el = document.getElementById('ov-spend');
+
   if (!Object.keys(cats).length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>No transactions this month</div>';
+    if (el) el.innerHTML = '<div class="empty-state"><div class="empty-icon">≋</div>No transactions this month</div>';
     return;
   }
   const total = Object.values(cats).reduce((a,b)=>a+b,0);
   const colors = ['#b5813a','#4a7c6f','#7b5ea7','#3a7d54','#c0692b','#4a6fa5','#7ab8a0','#b8a07e'];
-  el.innerHTML = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i) =>
+  if (el) el.innerHTML = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i) =>
     `<div class="spend-row">
       <div class="spend-label">${cat}</div>
       <div class="spend-bar-wrap"><div class="spend-bar-fill" style="width:${(amt/total*100).toFixed(0)}%;background:${colors[i%colors.length]}"></div></div>
@@ -1013,7 +1749,7 @@ function renderNWChart() {
 }
 
 function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
-  const totalAssets = liq + propVal + inv + goldVal + D.epf.balance + npsTotal;
+  const totalAssets = liq + propVal + inv + goldVal + D.epf.balance + npsTotal + getGratuityValue();
   const assetEl = document.getElementById('ov-assets-breakdown');
   const canvas = document.getElementById('assetDoughnutCanvas');
   
@@ -1031,14 +1767,14 @@ function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
   
   const ctx = canvas.getContext('2d');
   
-  const epfNps = D.epf.balance + npsTotal;
+  const epfNps = D.epf.balance + npsTotal + getGratuityValue();
   const innerGroups = [liq + inv + goldVal, propVal, epfNps];
   const outerClasses = [liq, inv, goldVal, propVal, epfNps];
-  
+
   assetChartInstance = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: ['Liquid Cash', 'Investments', 'Gold', 'Property', 'EPF & NPS'],
+      labels: ['Liquid Cash', 'Investments', 'Gold', 'Property', 'EPF / NPS / Gratuity'],
       datasets: [
         {
           data: innerGroups,
@@ -1053,7 +1789,7 @@ function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
           tooltip: {
             callbacks: {
               label: function(context) {
-                const labels = ['Liquid/Investments/Gold', 'Real Estate / Property', 'Retirement (EPF/NPS)'];
+                const labels = ['Liquid/Investments/Gold', 'Real Estate / Property', 'Retirement (EPF/NPS/Gratuity)'];
                 return labels[context.dataIndex] + ': ' + (numbersHidden ? '₹ ••••' : '₹' + context.raw.toLocaleString('en-IN'));
               }
             }
@@ -1098,7 +1834,7 @@ function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
     {label:'Investments', val:inv, color:'var(--accent3)'},
     {label:'Gold', val:goldVal, color:'var(--accent)'},
     {label:'Property', val:propVal, color:'#4a6fa5'},
-    {label:'EPF/NPS', val:epfNps, color:'var(--green)'},
+    {label:'EPF / NPS / Gratuity', val:epfNps, color:'var(--green)'},
   ].filter(s => s.val > 0);
   
   assetEl.innerHTML = segments.map(s => {
@@ -1116,20 +1852,20 @@ function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
   }).join('');
 }
 
-
 function renderAlerts() {
   const alerts = [];
   const cardOut = filterByMember(D.cards).reduce((s,c)=>s+c.outstanding,0);
   if (cardOut > 0) alerts.push({type:'warn', msg:`Card outstanding of ${fmt(cardOut)} — clear before interest kicks in.`});
   const t = D.tax;
   if (t.gross > 0 && t.s80c < 150000) alerts.push({type:'info', msg:`Section 80C: ${fmt(150000-t.s80c)} headroom remaining.`});
-  if (D.nps.fyContrib < 50000 && t.gross > 0) alerts.push({type:'info', msg:`NPS 80CCD(1B): ${fmt(50000-D.nps.fyContrib)} unused — worth ${fmt((50000-D.nps.fyContrib)*.312)} in tax savings.`});
+  const npsData = getNpsData();
+  if (npsData.fyContrib < 50000 && t.gross > 0) alerts.push({type:'info', msg:`NPS 80CCD(1B): ${fmt(50000-npsData.fyContrib)} unused — worth ${fmt((50000-npsData.fyContrib)*.312)} in tax savings.`});
   D.insurance.filter(p => { const d=daysUntil(p.dueDate); return d!==null&&d<=30; }).forEach(p => {
     const d = daysUntil(p.dueDate);
-    alerts.push({type:d<=0?'danger':'warn', msg:`${p.name} premium ${d<=0?'OVERDUE':'due in '+d+' days'} — ${fmt(p.premium)}`});
+    alerts.push({type:d<=0?'danger':'warn', msg:`${esc(p.name)} premium ${d<=0?'OVERDUE':'due in '+d+' days'} — ${fmt(p.premium)}`});
   });
   D.properties.filter(p => { const d=daysUntil(p.propTaxDue); return d!==null&&d<=30&&d>0; }).forEach(p => {
-    alerts.push({type:'warn', msg:`Property tax for ${p.name} due in ${daysUntil(p.propTaxDue)} days — ${fmt(p.propTax)}`});
+    alerts.push({type:'warn', msg:`Property tax for ${esc(p.name)} due in ${daysUntil(p.propTaxDue)} days — ${fmt(p.propTax)}`});
   });
   const el = document.getElementById('ov-alerts');
   if (!alerts.length) {
@@ -1157,13 +1893,17 @@ function renderAccounts() {
       <div class="row-left">
         <div class="row-icon" style="background:var(--accent2-light);font-size:16px">⬡</div>
         <div>
-          <div class="row-name">${a.name} ${memberTag(a.member)}</div>
-          <div class="row-sub">${a.type} · Updated ${a.updated||'—'}</div>
+          <div class="row-name">${esc(a.name)} ${memberTag(a.member)}</div>
+          <div class="row-sub">${esc(a.type)} · Updated ${a.updated||'—'}</div>
         </div>
       </div>
       <div class="row-right">
         <div class="row-val">${fmt(a.balance)}</div>
         <div style="font-size:10px;color:var(--green)">+${fmt(a.credits)} &nbsp;<span style="color:var(--red)">−${fmt(a.debits)}</span>/mo</div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-sm" onclick="openEditAcc(${a.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteAcc(${a.id})">Delete</button>
+        </div>
       </div>
     </div>`
   ).join('');
@@ -1192,12 +1932,18 @@ function renderCards() {
     return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
-          <div style="font-size:13px;font-weight:500">${c.name} ${memberTag(c.member)}</div>
+          <div style="font-size:13px;font-weight:500">${esc(c.name)} ${memberTag(c.member)}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">Due: ${c.dueDate||'—'} · Min: ${fmt(c.minDue)}</div>
         </div>
-        <div style="text-align:right">
-          <div class="row-val negative">−${fmt(c.outstanding)}</div>
-          <div style="font-size:10px;color:var(--muted)">of ${fmt(c.limit)} limit</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="text-align:right">
+            <div class="row-val negative">−${fmt(c.outstanding)}</div>
+            <div style="font-size:10px;color:var(--muted)">of ${fmt(c.limit)} limit</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <button class="btn btn-sm" onclick="openEditCard(${c.id})">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteCard(${c.id})">Delete</button>
+          </div>
         </div>
       </div>
       <div class="progress-wrap" style="margin:0">
@@ -1212,16 +1958,137 @@ function renderCards() {
 // REWARDS
 // ─────────────────────────────────────────────
 function renderRewards() {
-  const a = D.rewards['amex'], ic = D.rewards['icici-cc'];
-  document.getElementById('rw-amex-pts').textContent = numbersHidden ? '••••' : a.points.toLocaleString('en-IN');
-  document.getElementById('rw-icici-pts').textContent = numbersHidden ? '••••' : ic.points.toLocaleString('en-IN');
-  document.getElementById('rw-amex-big').textContent = numbersHidden ? '••••' : a.points.toLocaleString('en-IN');
-  document.getElementById('rw-icici-big').textContent = numbersHidden ? '••••' : ic.points.toLocaleString('en-IN');
-  const av = a.points * a.rate, iv = ic.points * ic.rate;
-  document.getElementById('rw-total-val').textContent = fmt(av+iv);
-  document.getElementById('rw-amex-val').textContent = '≈ '+fmt(av)+' value';
-  document.getElementById('rw-icici-val').textContent = '≈ '+fmt(iv)+' value';
-  document.getElementById('rw-amex-tier').textContent = a.tier || '—';
+  migrateRewards();
+  const list = D.rewards;
+  const now = new Date();
+  const totalVal = list.reduce((s, r) => s + r.points * r.rate, 0);
+  const expiringSoon = list.filter(r => {
+    if (!r.expiry) return false;
+    const days = Math.ceil((new Date(r.expiry) - now) / 86400000);
+    return days > 0 && days <= 90;
+  }).length;
+
+  document.getElementById('rw-total-val').textContent = numbersHidden ? '••••' : fmt(totalVal);
+  document.getElementById('rw-programs-count').textContent = list.length;
+  document.getElementById('rw-expiring-count').textContent = expiringSoon || '—';
+
+  const el = document.getElementById('reward-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">◇</div>No reward programs added — click "+ Add Program" to start</div>';
+    return;
+  }
+
+  const cards = list.map(r => {
+    const prog = REWARD_PROGRAMS[r.program] || REWARD_PROGRAMS.default;
+    const bestVal = r.points * r.rate;
+    const expiryDays = r.expiry ? Math.ceil((new Date(r.expiry) - now) / 86400000) : null;
+
+    const expiryBadge = expiryDays !== null
+      ? (expiryDays <= 0
+          ? `<span style="color:var(--red);font-size:10px;font-weight:600">⚠ Expired</span>`
+          : expiryDays <= 30
+            ? `<span style="color:var(--red);font-size:10px;font-weight:600">⚠ ${expiryDays}d left</span>`
+            : expiryDays <= 90
+              ? `<span style="color:var(--orange);font-size:10px">Exp in ${expiryDays}d</span>`
+              : `<span style="font-size:10px;color:var(--muted)">Exp: ${r.expiry}</span>`)
+      : `<span style="font-size:10px;color:var(--muted)">No expiry set</span>`;
+
+    // Earn rates section
+    let earnSection = '';
+    if (prog.earnRates && prog.earnRates.length) {
+      const earnRows = prog.earnRates.map((er, i) => {
+        const effPct = (er.ptsPerRs100 * r.rate).toFixed(1);
+        const isTop = i === 0;
+        const barW = Math.round((er.ptsPerRs100 / prog.earnRates[0].ptsPerRs100) * 100);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;${i < prog.earnRates.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;color:var(--text);font-weight:${isTop ? 600 : 400};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(er.category)}</div>
+            <div style="height:3px;background:var(--border);border-radius:2px;margin-top:3px;overflow:hidden">
+              <div style="height:100%;width:${barW}%;background:${isTop ? prog.color : 'var(--muted)'};border-radius:2px"></div>
+            </div>
+          </div>
+          <div style="text-align:right;white-space:nowrap">
+            <div style="font-size:10px;color:var(--muted)">${esc(er.note)}</div>
+            <div style="font-size:11px;font-family:'DM Mono',monospace;font-weight:600;color:${isTop ? prog.color : 'var(--text)'}">₹${effPct}/₹100</div>
+          </div>
+        </div>`;
+      }).join('');
+      earnSection = `<div style="margin-bottom:14px">
+        <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">Earn Rates (effective return per ₹100 spent)</div>
+        ${earnRows}
+      </div>`;
+    }
+
+    // Find best redemption option for highlighting
+    const optVals = prog.options.map(opt =>
+      opt.cashValue != null ? opt.cashValue : (opt.multiplier != null ? opt.multiplier * r.rate : 0)
+    );
+    const maxOptVal = Math.max(...optVals);
+
+    const redeemRows = prog.options.map((opt, i) => {
+      let earnedStr;
+      const optVal = optVals[i];
+      const isBest = optVal === maxOptVal && i === optVals.indexOf(maxOptVal);
+      const barW = maxOptVal > 0 ? Math.round((optVal / maxOptVal) * 100) : 0;
+
+      if (opt.cashValue != null) {
+        earnedStr = `≈ ${numbersHidden ? '••••' : fmt(Math.round(r.points * opt.cashValue))}`;
+      } else if (opt.multiplier != null) {
+        earnedStr = `${numbersHidden ? '••••' : Math.round(r.points * opt.multiplier).toLocaleString('en-IN')} miles`;
+      } else {
+        earnedStr = '—';
+      }
+
+      return `<div style="padding:7px 0;${i < prog.options.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <div>
+            <span style="font-size:12px;font-weight:${isBest ? 600 : 400};color:var(--text)">${isBest ? '★ ' : ''}${esc(opt.label)}</span>
+            <span style="font-size:10px;color:var(--muted);margin-left:4px">${esc(opt.ratio)}</span>
+          </div>
+          <div style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:${isBest ? prog.color : 'var(--muted)'}">${earnedStr}</div>
+        </div>
+        <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${barW}%;background:${isBest ? prog.color : 'var(--border)'};border-radius:2px;transition:width .3s"></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(opt.tag)}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="panel" style="border-top:3px solid ${prog.color};margin-bottom:0">
+      <div class="panel-header">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="panel-title">${esc(r.name)}</span>
+          ${r.tier ? `<span style="font-size:10px;background:${prog.color}22;padding:2px 8px;border-radius:10px;color:${prog.color};font-weight:600">${esc(r.tier)}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" onclick="openRewardModal(${r.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteReward(${r.id})">Delete</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px">
+          <div>
+            <div style="font-size:26px;font-weight:700;font-family:'DM Mono',monospace;color:${prog.color};line-height:1">${numbersHidden ? '••••' : r.points.toLocaleString('en-IN')}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">points &nbsp;·&nbsp; ${expiryBadge}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green)">≈ ${numbersHidden ? '••••' : fmt(Math.round(bestVal))}</div>
+            <div style="font-size:10px;color:var(--muted)">best value &nbsp;·&nbsp; ₹${r.rate}/pt</div>
+          </div>
+        </div>
+        ${prog.note ? `<div style="font-size:10px;color:${prog.color};background:${prog.color}14;padding:7px 10px;border-radius:6px;line-height:1.6;margin-bottom:12px">${esc(prog.note)}</div>` : ''}
+        ${earnSection}
+        <div class="divider" style="margin:10px 0 8px"></div>
+        <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Redemption Options</div>
+        ${redeemRows}
+      </div>
+    </div>`;
+  });
+
+  const gridStyle = cards.length >= 2
+    ? 'display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start'
+    : '';
+  el.innerHTML = `<div style="${gridStyle}">${cards.join('')}</div>`;
 }
 
 // ─────────────────────────────────────────────
@@ -1259,7 +2126,7 @@ function renderProperty() {
     taxListEl.innerHTML = withTax.sort((a,b)=>new Date(a.propTaxDue)-new Date(b.propTaxDue)).map(p => {
       const d = daysUntil(p.propTaxDue);
       return `<div class="data-row">
-        <div><div style="font-size:12px;font-weight:500">${p.name}</div><div style="font-size:10px;color:var(--muted)">${p.propTaxDue}</div></div>
+        <div><div style="font-size:12px;font-weight:500">${esc(p.name)}</div><div style="font-size:10px;color:var(--muted)">${esc(p.propTaxDue)}</div></div>
         <div style="text-align:right">
           <div class="${d<=0?'row-val negative':d<=30?'':'row-val'}" style="font-size:12px;color:${d<=0?'var(--red)':d<=30?'var(--accent)':'var(--text2)'}">${d<=0?'OVERDUE':d+' days'}</div>
           <div style="font-size:10px;color:var(--muted)">${fmt(p.propTax)}/yr</div>
@@ -1284,14 +2151,16 @@ function renderProperty() {
     const gainPct = p.cost ? (gain/p.cost*100).toFixed(1) : 0;
     const d = daysUntil(p.propTaxDue);
     const taxUrgent = d !== null && d <= 30 && d > 0;
-    const linkedLoan = p.linkedLoan ? D.loans.find(l => l.id === +p.linkedLoan) : null;
+    const linkedLoanIds = Array.isArray(p.linkedLoans) ? p.linkedLoans
+      : (p.linkedLoan ? [+p.linkedLoan] : []);
+    const linkedLoans = linkedLoanIds.map(id => D.loans.find(l => l.id === id)).filter(Boolean);
     return `<div class="prop-card">
       <div class="prop-card-header">
         <div>
           <span class="prop-type-badge ${typeClasses[p.type]}">${typeIcons[p.type]} ${typeLabels[p.type]}</span>
-          <div class="prop-name" style="margin-top:6px">${p.name}</div>
-          <div class="prop-location">${p.location||''} ${memberTag(p.member)}</div>
-          ${p.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:4px">${p.notes}</div>` : ''}
+          <div class="prop-name" style="margin-top:6px">${esc(p.name)}</div>
+          <div class="prop-location">${esc(p.location||'')} ${memberTag(p.member)}</div>
+          ${p.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:4px">${esc(p.notes)}</div>` : ''}
         </div>
         <div style="text-align:right">
           <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--text)">${fmt(p.value)}</div>
@@ -1305,7 +2174,9 @@ function renderProperty() {
         <div class="prop-meta-item"><div class="prop-meta-label">Area</div><div class="prop-meta-val">${p.area ? p.area.toLocaleString()+' sq.ft' : '—'}</div></div>
         <div class="prop-meta-item"><div class="prop-meta-label">Purchased</div><div class="prop-meta-val">${p.purchaseDate||'—'}</div></div>
       </div>
-      ${linkedLoan ? `<div style="margin-top:10px;padding:8px 10px;background:var(--surface2);border-radius:7px;font-size:11px;color:var(--muted)">Linked loan: <strong style="color:var(--text)">${linkedLoan.name}</strong> — Outstanding ${fmt(linkedLoan.outstanding)}, EMI ${fmt(linkedLoan.emi)}/mo</div>` : ''}
+      ${linkedLoans.length ? `<div style="margin-top:10px;padding:8px 10px;background:var(--surface2);border-radius:7px">
+        ${linkedLoans.map(l => `<div style="font-size:11px;color:var(--muted);padding:2px 0">Linked loan: <strong style="color:var(--text)">${esc(l.name)}</strong> — Outstanding ${fmt(l.outstanding)}, EMI ${fmt(l.emi)}/mo</div>`).join('')}
+      </div>` : ''}
       ${taxUrgent ? `<div style="margin-top:8px;" class="alert alert-warn" style="padding:6px 10px"><span>⚡</span><span>Property tax due in ${d} days — ${fmt(p.propTax)}</span></div>` : ''}
       <div class="prop-actions">
         <button class="btn btn-sm" onclick="openEditProp(${p.id})">Edit</button>
@@ -1342,7 +2213,7 @@ function renderGold() {
         <div class="gold-item-left">
           <div class="row-icon" style="background:var(--accent-light);color:var(--accent)">◎</div>
           <div>
-            <div class="row-name">${g.name} ${memberTag(g.member)}</div>
+            <div class="row-name">${esc(g.name)} ${memberTag(g.member)}</div>
             <div class="row-sub">${numbersHidden ? '••' : g.weight}g · ${g.purity}K · ${g.form}</div>
           </div>
         </div>
@@ -1401,13 +2272,14 @@ function renderInv() {
   tbody.innerHTML = list.map(inv => {
     const r = inv.cost ? (((inv.value-inv.cost)/inv.cost)*100).toFixed(1) : 0;
     return `<tr>
-      <td><div style="font-size:12px;font-weight:500">${inv.name}</div></td>
+      <td><div style="font-size:12px;font-weight:500">${esc(inv.name)}</div></td>
       <td><span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">${inv.type}</span></td>
       <td>${memberTag(inv.member)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(inv.cost)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(inv.value)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;color:${r>=0?'var(--green)':'var(--red)'}">${r>=0?'+':''}${r}%
-        <button onclick="deleteInv(${inv.id})" style="margin-left:8px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">✕</button>
+        <button onclick="openEditInv(${inv.id})" style="margin-left:8px;background:none;border:none;cursor:pointer;color:var(--accent);font-size:11px">✎</button>
+        <button onclick="deleteInv(${inv.id})" style="margin-left:4px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">✕</button>
       </td>
     </tr>`;
   }).join('');
@@ -1430,6 +2302,37 @@ function renderEPF() {
   document.getElementById('epf-80c-d').textContent = fmt(Math.min(annual,150000));
   document.getElementById('epf-80c-pct').textContent = pct + '%';
   document.getElementById('epf-80c-bar').style.width = pct + '%';
+
+  // Gratuity
+  const g = D.gratuity || {};
+  const years = calcGratuityYears(g.joiningDate);
+  const computed = (g.basicDA && g.joiningDate) ? Math.round((g.basicDA * 15 / 26) * years) : 0;
+  const effective = g.actualAccrued > 0 ? g.actualAccrued : computed;
+
+  document.getElementById('grat-amount-display').textContent = fmt(effective);
+  document.getElementById('grat-years-display').textContent = years > 0 ? years + (years === 1 ? ' yr' : ' yrs') + ' service' : 'Enter joining date';
+  document.getElementById('grat-employer-d').textContent = g.employer || '—';
+  document.getElementById('grat-joined-d').textContent = g.joiningDate || '—';
+  document.getElementById('grat-basic-d').textContent = g.basicDA ? fmt(g.basicDA) + '/mo' : '—';
+  document.getElementById('grat-computed-d').textContent = computed > 0 ? fmt(computed) : '—';
+  document.getElementById('grat-actual-d').textContent = g.actualAccrued > 0 ? fmt(g.actualAccrued) : 'Using computed';
+
+  const eligEl = document.getElementById('grat-eligibility');
+  if (!g.joiningDate) {
+    eligEl.textContent = 'Enter joining date to check';
+    eligEl.style.color = 'var(--muted)';
+  } else if (years >= 5) {
+    eligEl.textContent = '✓ Eligible — ' + years + ' yrs completed';
+    eligEl.style.color = 'var(--green)';
+  } else {
+    const needed = 5 - Math.floor((new Date() - new Date(g.joiningDate)) / (365.25 * 24 * 3600 * 1000));
+    eligEl.textContent = `Building — ~${Math.max(1, needed)} yr${needed > 1 ? 's' : ''} to eligibility`;
+    eligEl.style.color = 'var(--accent)';
+  }
+
+  const taxFreePct = Math.min(100, Math.round((effective / 2000000) * 100));
+  document.getElementById('grat-taxfree-bar').style.width = taxFreePct + '%';
+  document.getElementById('grat-taxfree-pct').textContent = taxFreePct + '%';
 }
 
 // ─────────────────────────────────────────────
@@ -1464,29 +2367,73 @@ function renderNPS() {
 // ─────────────────────────────────────────────
 // FINANCIAL CALENDAR
 // ─────────────────────────────────────────────
-function detectSubscriptions() {
-  const list = [];
-  const recurKw = ['netflix','prime','spotify','hotstar','jio','airtel','gym','subscription','sids farm','nobroker'];
-  const txns = filterByMember(D.transactions).filter(t => t.type === 'debit');
-  
-  recurKw.forEach(kw => {
-    const matching = txns.filter(t => (t.desc || '').toLowerCase().includes(kw));
-    if (matching.length > 0) {
-      matching.sort((a, b) => new Date(b.date) - new Date(a.date));
-      const latest = matching[0];
-      const d = new Date(latest.date);
-      const day = d.getDate();
-      list.push({
-        name: kw.charAt(0).toUpperCase() + kw.slice(1),
-        desc: latest.desc,
-        amount: latest.amount,
-        day: day,
-        lastDate: latest.date,
-        member: latest.member
-      });
-    }
+function normalizeRecurDesc(desc) {
+  return (desc || '')
+    .toLowerCase()
+    .replace(/^(upi|neft|imps|rtgs|ach|ecs|nach|si|bil|clg|int)\s*[\/-]?\s*/i, '')
+    .replace(/\b\d{6,}\b/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ').slice(0, 4).join(' ');
+}
+
+function detectRecurringFromTxns(memberFilter) {
+  const txns = (memberFilter ? filterByMember(D.transactions) : D.transactions)
+    .filter(t => t.type === 'debit' && t.cat !== 'Family Transfer');
+
+  // Group by normalized description
+  const groups = {};
+  txns.forEach(t => {
+    const key = normalizeRecurDesc(t.desc);
+    if (!key || key.length < 3) return;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
   });
-  return list;
+
+  const results = [];
+  Object.entries(groups).forEach(([key, hits]) => {
+    if (hits.length < 2) return;
+
+    // Must appear in at least 2 distinct calendar months
+    const months = new Set(hits.map(t => t.date.slice(0, 7)));
+    if (months.size < 2) return;
+
+    // Amount consistency: coefficient of variation < 20%
+    const amounts = hits.map(t => t.amount);
+    const mean = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+    if (mean < 10) return;
+    const stdDev = Math.sqrt(amounts.reduce((s, a) => s + (a - mean) ** 2, 0) / amounts.length);
+    if (mean > 0 && stdDev / mean > 0.20) return;
+
+    hits.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const latest = hits[0];
+    const avgDay = Math.round(hits.reduce((s, t) => s + new Date(t.date).getDate(), 0) / hits.length);
+
+    // Derive a clean display name from the most recent description
+    const displayName = (latest.desc || key)
+      .replace(/^(upi|neft|imps|rtgs|ach|ecs|nach|si|bil)\s*[\/-]?\s*/i, '')
+      .replace(/\b\d{8,}\b/g, '')
+      .trim()
+      .split(/[\/\-_]/)[0]
+      .trim()
+      .slice(0, 32);
+
+    results.push({
+      name: displayName,
+      key,
+      amount: Math.round(mean),
+      day: avgDay,
+      lastDate: latest.date,
+      count: hits.length,
+      months: months.size,
+      member: latest.member,
+      cat: latest.cat
+    });
+  });
+
+  // Sort by amount descending
+  return results.sort((a, b) => b.amount - a.amount);
 }
 
 function getCalendarEvents(year, month) {
@@ -1539,14 +2486,14 @@ function getCalendarEvents(year, month) {
     }
   });
   
-  // 3. Subscriptions
-  detectSubscriptions().forEach(s => {
+  // 3. Recurring transactions (auto-detected from history)
+  detectRecurringFromTxns(true).forEach(s => {
     events.push({
       type: 'sub',
       name: s.name,
       day: s.day,
       amount: s.amount,
-      meta: 'Subscription',
+      meta: 'Recurring',
       member: s.member
     });
   });
@@ -1668,7 +2615,7 @@ function renderCalendarDetails(events, lowBalanceDays, liquidBal) {
   if (lowBalanceDays.size > 0) {
     const firstLowDay = Math.min(...Array.from(lowBalanceDays));
     const dayEvents = events.filter(e => e.day === firstLowDay);
-    const lowEventNames = dayEvents.map(e => e.name).join(', ');
+    const lowEventNames = dayEvents.map(e => esc(e.name)).join(', ');
     
     html += `<div class="alert alert-danger" style="margin-bottom:12px;padding:10px;border-radius:6px;font-size:11px;line-height:1.4;">
       <span>⚠️</span>
@@ -1749,8 +2696,8 @@ function renderLoans() {
         <div class="loan-card-header">
           <div>
             <span class="loan-type ${typeClasses[l.type]}">${typeLabels[l.type]||l.type}</span>
-            <div style="font-size:14px;font-weight:500;margin-top:5px">${l.name} ${memberTag(l.member)}</div>
-            <div style="font-size:11px;color:var(--muted)">${l.lender||''}</div>
+            <div style="font-size:14px;font-weight:500;margin-top:5px">${esc(l.name)} ${memberTag(l.member)}</div>
+            <div style="font-size:11px;color:var(--muted)">${esc(l.lender||'')}</div>
           </div>
           <div style="text-align:right">
             <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--red)">−${fmt(l.outstanding)}</div>
@@ -1784,7 +2731,7 @@ function renderLoans() {
   } else {
     calEl.innerHTML = list.map(l => `
       <div class="data-row">
-        <div><div style="font-size:12px;font-weight:500">${l.name}</div><div style="font-size:10px;color:var(--muted)">${l.lender||''} · Day ${l.emiDay||'—'}</div></div>
+        <div><div style="font-size:12px;font-weight:500">${esc(l.name)}</div><div style="font-size:10px;color:var(--muted)">${esc(l.lender||'')} · Day ${esc(l.emiDay||'—')}</div></div>
         <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--accent)">${fmt(l.emi)}</div>
       </div>`).join('');
   }
@@ -1821,19 +2768,30 @@ function renderIns() {
       const d = daysUntil(p.dueDate);
       const urgent = d !== null ? (d <= 0 ? 'ins-overdue' : d <= 30 ? 'ins-due-soon' : '') : '';
       const dueTxt = d === null ? '—' : d <= 0 ? `<span style="color:var(--red)">OVERDUE</span>` : d <= 30 ? `<span style="color:var(--accent)">${d} days</span>` : `${d} days`;
+      
+      const sourceBadge = p.source === 'doc' ? `<span style="font-size:10px;background:rgba(123,94,167,0.1);color:#7b5ea7;padding:2px 6px;border-radius:4px;margin-left:6px">📄 Doc Scan</span>` : 
+                          p.source === 'txn' ? `<span style="font-size:10px;background:rgba(74,111,165,0.1);color:#4a6fa5;padding:2px 6px;border-radius:4px;margin-left:6px">🔍 Txn Scan</span>` : '';
+      
+      const tenure = (p.startYear && p.endYear) ? `${p.startYear} – ${p.endYear}` : (p.startYear ? `Since ${p.startYear}` : '—');
+      const nomDisplay = p.nominee ? `<span style="color:var(--text)">${esc(p.nominee)}${p.nomineeRel ? ' ('+esc(p.nomineeRel)+')' : ''}</span>` : `<span style="color:var(--red)">⚠ Not set</span>`;
+
       return `<div class="ins-card ${urgent}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <span class="ins-type-badge ${typeClasses[p.type]}">${typeIcons[p.type]} ${typeLabels[p.type]}</span>
-            <div style="font-size:13px;font-weight:500;margin-top:5px">${p.name} ${memberTag(p.member)}</div>
-            <div style="font-size:11px;color:var(--muted)">${p.insurer}${p.polno?' · '+p.polno:''}</div>
+            <span class="ins-type-badge ${typeClasses[p.type]}">${typeIcons[p.type]} ${typeLabels[p.type]}</span>${sourceBadge}
+            <div style="font-size:13px;font-weight:500;margin-top:5px">${esc(p.name)} ${memberTag(p.member)}</div>
+            <div style="font-size:11px;color:var(--muted)">${esc(p.insurer)}${p.polno?' · '+esc(p.polno):''}</div>
           </div>
           <div style="text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:var(--accent)">${fmt(p.premium)}<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">${p.freq||'annual'}</div></div>
         </div>
-        <div class="ins-meta">
+        <div class="ins-meta" style="grid-template-columns:1fr 1fr 1fr">
           <div><div class="ins-meta-label">Cover</div><div class="ins-meta-val" style="color:var(--green)">${p.cover>=1e7?cr(p.cover):lk(p.cover)}</div></div>
-          <div><div class="ins-meta-label">Due Date</div><div class="ins-meta-val">${p.dueDate||'—'}</div></div>
+          <div><div class="ins-meta-label">Tenure</div><div class="ins-meta-val">${tenure}</div></div>
           <div><div class="ins-meta-label">Renewal In</div><div class="ins-meta-val">${dueTxt}</div></div>
+        </div>
+        <div class="ins-meta" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+           <div><div class="ins-meta-label">Nominee</div><div class="ins-meta-val">${nomDisplay}</div></div>
+           <div style="grid-column: span 2"><div class="ins-meta-label">Covered</div><div class="ins-meta-val">${p.covered && p.covered.length ? p.covered.map(esc).join(', ') : 'Self'}</div></div>
         </div>
         <div class="prop-actions" style="margin-top:8px">
           <button class="btn btn-sm" onclick="openEditIns(${p.id})">Edit</button>
@@ -1843,15 +2801,43 @@ function renderIns() {
     }).join('');
   }
 
-  // Summary
-  const lifeEl = list.filter(p=>p.type==='life');
-  const healthSelf = list.filter(p=>p.type==='health'&&p.covered&&p.covered.some(c=>c.toLowerCase().includes('self')));
-  const healthFam = list.filter(p=>p.type==='health');
-  const autoEl = list.filter(p=>p.type==='auto');
-  document.getElementById('ins-life-summary').textContent = lifeEl.length ? lifeEl.length+' policy/ies · '+cr(lifeCover) : '—';
-  document.getElementById('ins-health-self').textContent = healthSelf.length ? fmt(healthSelf.reduce((s,p)=>s+p.cover,0)) : '—';
-  document.getElementById('ins-health-family').textContent = healthFam.length ? fmt(healthCover)+' total' : '—';
-  document.getElementById('ins-auto-summary').textContent = autoEl.length ? autoEl.length+' vehicle(s)' : '—';
+  // GAP DETECTOR
+  const gaps = [];
+  const noLife = !list.some(p => p.type === 'life' && p.cover >= 5000000);
+  const noHealth = !list.some(p => p.type === 'health');
+  const missingNominee = list.filter(p => !p.nominee && (p.type==='life'||p.type==='health')).length;
+  if (noLife) gaps.push("No sufficient Life Cover (Term Insurance) detected.");
+  if (noHealth) gaps.push("No Health Cover detected.");
+  if (missingNominee > 0) gaps.push(`${missingNominee} policies missing nominee details.`);
+  
+  const gapEl = document.getElementById('ins-gap-detector');
+  if (gaps.length > 0) {
+    gapEl.style.display = 'block';
+    gapEl.innerHTML = `<strong>Coverage Gaps Detected:</strong><ul style="margin-top:4px;padding-left:20px">` + gaps.map(g => `<li>${g}</li>`).join('') + `</ul>`;
+  } else {
+    gapEl.style.display = 'none';
+  }
+
+  // FAMILY COVERAGE GRID
+  const fam = ["Madhu", "Sailaja", "Charan", "Himaja"];
+  const gridHTML = fam.map(person => {
+    // Check if person is covered under any life/health
+    const hasLife = list.some(p => p.type === 'life' && (p.member.toLowerCase() === person.toLowerCase() || (p.covered && p.covered.some(c => c.toLowerCase() === person.toLowerCase()))));
+    const hasHealth = list.some(p => p.type === 'health' && (p.member.toLowerCase() === person.toLowerCase() || (p.covered && p.covered.some(c => c.toLowerCase() === person.toLowerCase())) || p.member === 'joint' || p.member === 'parents'));
+    
+    return `<div style="background:var(--surface2);border-radius:6px;padding:8px;border:1px solid var(--border)">
+       <div style="font-weight:600;font-size:12px;margin-bottom:6px">${person}</div>
+       <div style="display:flex;justify-content:space-between;font-size:11px">
+         <span style="color:var(--muted)">Life</span> <span>${hasLife ? '✅' : '❌'}</span>
+       </div>
+       <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px">
+         <span style="color:var(--muted)">Health</span> <span>${hasHealth ? '✅' : '❌'}</span>
+       </div>
+    </div>`;
+  }).join('');
+  document.getElementById('ins-coverage-grid').innerHTML = gridHTML;
+
+  // 80D Tax Summary
   const healthPremium = list.filter(p=>p.type==='health').reduce((s,p)=>s+p.premium,0);
   const d80 = Math.min(healthPremium, 75000);
   document.getElementById('ins-80d-val').textContent = fmt(d80);
@@ -1999,7 +2985,7 @@ function renderBudget() {
       const overBudget = budget > 0 && actual > budget;
       const barColor = overBudget ? 'var(--red)' : pct > 75 ? 'var(--orange)' : 'var(--green)';
       return `<div class="budget-row">
-        <div class="budget-label">${cat}</div>
+        <div class="budget-label">${esc(cat)}</div>
         <div class="budget-bars">
           <div class="budget-bar-wrap">
             ${budget > 0 ? `<div class="budget-bar-budget" style="width:100%"></div>` : ''}
@@ -2026,7 +3012,7 @@ function renderBudget() {
       const prev = prevSpend[cat]||0;
       const delta = cur - prev;
       return `<div class="data-row" style="padding:7px 0">
-        <div style="font-size:12px;color:var(--text2)">${cat}</div>
+        <div style="font-size:12px;color:var(--text2)">${esc(cat)}</div>
         <div style="text-align:right">
           <div style="font-family:'DM Mono',monospace;font-size:12px">${fmt(cur)}</div>
           <div style="font-size:10px;color:${delta>0?'var(--red)':delta<0?'var(--green)':'var(--muted)'}">
@@ -2040,8 +3026,8 @@ function renderBudget() {
   // Build budget form
   const formEl = document.getElementById('budget-form-rows');
   formEl.innerHTML = Object.keys(D.budgets).map(cat =>
-    `<div class="budget-form-row form-group" data-cat="${cat}">
-      <label class="form-label">${cat}</label>
+    `<div class="budget-form-row form-group" data-cat="${esc(cat)}">
+      <label class="form-label">${esc(cat)}</label>
       <input class="form-input" type="number" placeholder="0" value="${D.budgets[cat]||''}">
     </div>`
   ).join('');
@@ -2235,11 +3221,11 @@ function renderTxns() {
         <div class="txn-dot" style="background:${catColors[t.cat]||'#8a8279'}"></div>
         <div>
           <div class="txn-name">${esc(t.desc)} ${memberTag(t.member)}</div>
-          <div class="txn-cat">${t.cat} &middot; ${t.date}${getTransactionAccountBadge(t)}</div>
+          <div class="txn-cat">${esc(t.cat)} &middot; ${t.date}${getTransactionAccountBadge(t)}</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="txn-amount ${t.type}">${t.type==='debit'?'&minus;':'+'}${fmt(t.amount)}</div>
+        <div class="txn-amount ${esc(t.type)}">${t.type==='debit'?'&minus;':'+'}${fmt(t.amount)}</div>
         <button onclick="deleteTxn(${t.id})" title="Delete" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 4px;line-height:1" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">&#x2715;</button>
       </div>
     </div>`
@@ -2269,11 +3255,678 @@ function resetTxnFilters() {
   renderTxns();
 }
 
+function renderWidgets() {
+  if (!document.getElementById('w-salary')) return;
+  const txns = D.transactions;
+  const now = new Date();
+  const cm = now.getMonth(), cy = now.getFullYear();
+  const pm = cm===0?11:cm-1, py = cm===0?cy-1:cy;
+  const txnMonth = (t,mo,yr) => { const d=new Date(t.date); return d.getMonth()===mo&&d.getFullYear()===yr; };
+  const debits  = (mo,yr) => txns.filter(t=>t.type==='debit'&&txnMonth(t,mo,yr));
+  const credits = (mo,yr) => txns.filter(t=>t.type==='credit'&&txnMonth(t,mo,yr));
+  const sum = arr => arr.reduce((s,t)=>s+t.amount,0);
+
+  // 1. SALARY CREDIT TRACKER
+  const salTxns = txns.filter(t=>t.type==='credit' && (t.cat === 'Salary' || /salary|salaries|neft.*cr|salary.*credit|inward.*salary/i.test(t.desc||'')));
+  const lastSal = [...salTxns].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+  const salAmt = lastSal?lastSal.amount:0;
+  const prevSal = sum(salTxns.filter(t=>txnMonth(t,pm,py)));
+  const salD = salAmt-prevSal;
+  document.getElementById('w-salary').innerHTML = `
+    <div class="widget-label">&#x1F4B0; Salary Credit Tracker</div>
+    <div class="widget-value" style="color:var(--green)">${fmt(salAmt)}</div>
+    <div class="widget-sub">${lastSal?'Last credited '+lastSal.date:'No salary detected yet'}</div>
+    ${salD!==0?`<div class="widget-chip ${salD>0?'wchip-up':'wchip-down'}">${salD>0?'&#8593;':'&#8595;'} ${fmt(Math.abs(salD))} vs prev</div>`:''}`;
+
+  // 2. RECURRING SPEND TRACKER (auto-detected from history)
+  const recurDetected = detectRecurringFromTxns(true);
+  const recurTotal = recurDetected.reduce((s, r) => s + r.amount, 0);
+  document.getElementById('w-recurring').innerHTML = `
+    <div class="widget-label">&#x1F504; Recurring Spends</div>
+    <div class="widget-value" style="color:var(--orange)">${fmt(recurTotal)}</div>
+    <div class="widget-sub">${recurDetected.length} recurring detected</div>
+    ${recurDetected.slice(0,2).map(r=>`<div style="font-size:10px;color:var(--muted);margin-top:3px">&rarr; ${esc(r.name.slice(0,28))} &middot; ${fmt(r.amount)}</div>`).join('')}`;
+
+  // 3. CASH FLOW FORECAST
+  const avg3Debit = [0,1,2].reduce((s,i)=>{
+    const mo=(cm-i+12)%12, yr=cy-(cm-i<0?1:0);
+    return s+sum(debits(mo,yr));
+  },0)/3;
+  const curIncome = sum(credits(cm,cy));
+  const surplus = curIncome-avg3Debit;
+  document.getElementById('w-cashflow').innerHTML = `
+    <div class="widget-label">&#x1F4C8; Cash Flow Forecast</div>
+    <div class="widget-value" style="color:${surplus>=0?'var(--accent2)':'var(--red)'}">${surplus>=0?'+':''}${fmt(surplus)}</div>
+    <div class="widget-sub">Est. month-end surplus<br>Avg spend: ${fmt(avg3Debit)} &middot; Income: ${fmt(curIncome)}</div>`;
+
+  // 4. NET WORTH VELOCITY
+  const hist = D.nwHistory;
+  let vel=0, velTxt='Not enough data';
+  if (hist.length>=2) {
+    vel = hist[hist.length-1].v - hist[hist.length-2].v;
+    const rate3 = hist.length>=3 ? (hist[hist.length-1].v-hist[hist.length-3].v)/2 : vel;
+    velTxt = (rate3>=0?'+':'')+fmt(Math.abs(rate3))+'/mo avg (3mo)';
+  }
+  document.getElementById('w-nw-velocity').innerHTML = `
+    <div class="widget-label">&#x26A1; NW Velocity</div>
+    <div class="widget-value" style="color:${vel>=0?'var(--accent)':'var(--red)'}">${vel>=0?'+':''}${fmt(vel)}</div>
+    <div class="widget-sub">${velTxt}</div>
+    <div class="widget-chip ${vel>=0?'wchip-up':'wchip-down'}">${vel>=0?'&#8593; Growing':'&#8595; Shrinking'}</div>`;
+
+  // 5. TAX HARVEST INTELLIGENCE
+  const investGains = D.investments.reduce((s,i)=>s+(i.value-i.cost),0);
+  const harvestRoom = Math.max(0,100000-Math.max(0,investGains));
+  const npsDataW = getNpsData();
+  const npsRoom = Math.max(0,50000-(npsDataW.fyContrib||0));
+  const s80cLeft = Math.max(0,150000-(D.tax.s80c||0));
+  document.getElementById('w-tax-harvest').innerHTML = `
+    <div class="widget-label">&#x1F9E0; Tax-Harvest Intel</div>
+    <div class="widget-value" style="color:var(--accent3)">${fmt(harvestRoom)}</div>
+    <div class="widget-sub">LTCG tax-free headroom</div>
+    ${npsRoom>0?`<div class="widget-chip wchip-warn">NPS: ${fmt(npsRoom)} left</div>`:''}
+    ${s80cLeft>0?`<div class="widget-chip wchip-neutral" style="margin-left:4px">80C: ${fmt(s80cLeft)} left</div>`:''}`;
+
+  // 6. CREDIT CARD OPTIMISATION SCORE
+  const totLim = D.cards.reduce((s,c)=>s+c.limit,0);
+  const totOut = D.cards.reduce((s,c)=>s+c.outstanding,0);
+  const utilPct = totLim?Math.round(totOut/totLim*100):0;
+  const score = Math.max(0,Math.min(100,100-utilPct*1.5));
+  const scColor = score>=75?'var(--green)':score>=50?'var(--accent)':'var(--red)';
+  document.getElementById('w-cc-score').innerHTML = `
+    <div class="widget-label">&#x1F4B3; CC Optimisation Score</div>
+    <div class="widget-value" style="color:${scColor}">${Math.round(score)}<span style="font-size:12px;color:var(--muted)">/100</span></div>
+    <div class="widget-bar-row"><div class="widget-bar-bg"><div class="widget-bar-fill" style="width:${score}%;background:${scColor}"></div></div></div>
+    <div class="widget-sub">Utilization ${utilPct}% &middot; ${fmt(Math.max(0,totLim-totOut))} available</div>`;
+
+  // 7. DEBT PAYDOWN VISUALISER
+  const totDebt = D.loans.reduce((s,l)=>s+l.outstanding,0);
+  const totPrinc = D.loans.reduce((s,l)=>s+l.principal,0);
+  const paidPct = totPrinc?Math.round((1-totDebt/totPrinc)*100):0;
+  const totEMI  = D.loans.reduce((s,l)=>s+l.emi,0);
+  document.getElementById('w-debt-paydown').innerHTML = `
+    <div class="widget-label">&#x1F3AF; Debt Paydown</div>
+    <div class="widget-value" style="color:var(--red)">${fmt(totDebt)}</div>
+    <div class="widget-bar-row"><div class="widget-bar-bg"><div class="widget-bar-fill" style="width:${paidPct}%;background:var(--green)"></div></div><span style="font-size:10px;color:var(--muted);margin-left:4px">${paidPct}% paid</span></div>
+    <div class="widget-sub">EMI: ${fmt(totEMI)}/mo &middot; ${D.loans.length} loan(s)</div>`;
+
+  // 8. LIFESTYLE INFLATION DETECTOR
+  const skip = ['Salary','Investment','EMI'];
+  const curSp  = sum(debits(cm,cy).filter(t=>!skip.includes(t.cat)));
+  const prevSp = sum(debits(pm,py).filter(t=>!skip.includes(t.cat)));
+  const infl = prevSp?((curSp-prevSp)/prevSp*100).toFixed(1):0;
+  const inflC = infl>10?'var(--red)':infl>0?'var(--orange)':'var(--green)';
+  document.getElementById('w-lifestyle').innerHTML = `
+    <div class="widget-label">&#x1F4C8; Lifestyle Inflation</div>
+    <div class="widget-value" style="color:${inflC}">${infl>0?'+':''}${infl}%</div>
+    <div class="widget-sub">vs last month &middot; This mo: ${fmt(curSp)}<br>Last mo: ${fmt(prevSp)}</div>
+    <div class="widget-chip ${infl>10?'wchip-down':infl>0?'wchip-warn':'wchip-up'}">${infl>10?'&#x26A0;&#xFE0F; Inflating':infl>0?'&#x26A1; Mild rise':'&#x2713; Stable'}</div>`;
+}
+
+function openSalaryHistory() {
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const now = new Date();
+  const salTxns = D.transactions.filter(t =>
+    t.type === 'credit' && (t.cat === 'Salary' || /salary|salaries|neft.*cr|salary.*credit|inward.*salary/i.test(t.desc || ''))
+  );
+
+  // Build last 3 months in reverse order
+  const rows = [];
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mo = d.getMonth(), yr = d.getFullYear();
+    const monthTxns = salTxns
+      .filter(t => { const td = new Date(t.date); return td.getMonth() === mo && td.getFullYear() === yr; })
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    const total = monthTxns.reduce((s, t) => s + t.amount, 0);
+    rows.push({ label: `${MONTHS[mo]} ${yr}`, total, txns: monthTxns });
+  }
+
+  const prevTotal = rows[1].total;
+  const html = rows.map((r, i) => {
+    const delta = i === 0 && prevTotal ? r.total - prevTotal : null;
+    const deltaHtml = delta !== null && delta !== 0
+      ? `<span style="font-size:10px;color:${delta>0?'var(--green)':'var(--red)'};margin-left:6px">${delta>0?'▲':'▼'} ${fmt(Math.abs(delta))}</span>`
+      : '';
+    const txnRows = r.txns.length
+      ? r.txns.map(t => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 5px 12px;border-left:2px solid var(--border)">
+            <div>
+              <div style="font-size:11px;color:var(--text2)">${esc(t.desc.slice(0, 40))}${t.desc.length > 40 ? '…' : ''}</div>
+              <div style="font-size:10px;color:var(--muted)">${t.date}</div>
+            </div>
+            <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--green);white-space:nowrap;margin-left:12px">${fmt(t.amount)}</div>
+          </div>`).join('')
+      : `<div style="font-size:11px;color:var(--muted);padding:6px 0 6px 12px">No salary credit found</div>`;
+
+    return `
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em">${r.label}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:${r.total?'var(--green)':'var(--muted)'}">${r.total ? fmt(r.total) : '—'}${deltaHtml}</div>
+        </div>
+        ${txnRows}
+      </div>`;
+  }).join('<div style="border-top:1px solid var(--border);margin:4px 0 16px"></div>');
+
+  document.getElementById('salary-history-content').innerHTML = html || '<div class="empty-state">No salary transactions found.</div>';
+  openModal('salaryHistoryModal');
+}
+
+function openRecurringDetail() {
+  const recurring = detectRecurringFromTxns(true);
+  const totalMonthly = recurring.reduce((s, r) => s + r.amount, 0);
+
+  if (!recurring.length) {
+    document.getElementById('recurring-detail-content').innerHTML =
+      '<div class="empty-state">No recurring transactions detected yet.<br><small style="color:var(--muted)">Import at least 2 months of statements to enable auto-detection.</small></div>';
+    openModal('recurringDetailModal');
+    return;
+  }
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const rows = recurring.map(r => {
+    const nextDate = (() => {
+      const now = new Date();
+      const d = new Date(now.getFullYear(), now.getMonth(), r.day);
+      if (d < now) d.setMonth(d.getMonth() + 1);
+      return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+    })();
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">
+            ~${r.day}th every month &middot; seen ${r.months} months &middot; ${esc(r.cat||'Other')}
+          </div>
+        </div>
+        <div style="text-align:right;margin-left:12px;flex-shrink:0">
+          <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--orange)">${fmt(r.amount)}</div>
+          <div style="font-size:10px;color:var(--muted)">next ~${nextDate}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const summary = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--text2)">${recurring.length} recurring detected</div>
+      <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:var(--orange)">${fmt(totalMonthly)}<span style="font-size:10px;font-weight:400;color:var(--muted)">/mo</span></div>
+    </div>`;
+
+  document.getElementById('recurring-detail-content').innerHTML = summary + rows;
+  openModal('recurringDetailModal');
+}
+
 // ─────────────────────────────────────────────
 // CSV IMPORT
 // ─────────────────────────────────────────────
 let selectedBank = 'icici-salary';
 let parsedRows = [];
+let pendingPdfFile = null;
+
+async function ensurePdfJS() {
+  if (typeof window !== 'undefined' && window.pdfjsLib) return window.pdfjsLib;
+  if (typeof window !== 'undefined' && window['pdfjs-dist/build/pdf']) {
+    window.pdfjsLib = window['pdfjs-dist/build/pdf'];
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    return window.pdfjsLib;
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+    script.integrity = 'sha384-uLiAv4VcjM5H2Jsqzl8EajEaxPugj1CIzQaCjQ8c5//vC+elhxO5pZfXGxoLQi1W';
+    script.crossOrigin = 'anonymous';
+    script.onload = () => {
+      window.pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        resolve(window.pdfjsLib);
+      } else {
+        reject(new Error("PDF.js loaded but is undefined on window"));
+      }
+    };
+    script.onerror = () => reject(new Error("Failed to load PDF.js from CDN. Verify internet connectivity."));
+    document.head.appendChild(script);
+  });
+}
+
+function reconstructTextWithCoordinates(textContent) {
+  const items = textContent.items;
+  if (!items || items.length === 0) return '';
+  
+  const positionedItems = items.map(item => {
+    const matrix = item.transform || [1, 0, 0, 1, 0, 0];
+    return {
+      text: item.str,
+      x: matrix[4],
+      y: matrix[5],
+      width: item.width || 0,
+      height: item.height || 0
+    };
+  });
+  
+  positionedItems.sort((a, b) => b.y - a.y);
+  
+  const lines = [];
+  let currentLineY = null;
+  let currentLineItems = [];
+  const lineTolerance = 4; // Tolerance for grouping items physically on the same row
+  
+  for (const item of positionedItems) {
+    if (currentLineY === null) {
+      currentLineY = item.y;
+      currentLineItems.push(item);
+    } else if (Math.abs(item.y - currentLineY) <= lineTolerance) {
+      currentLineItems.push(item);
+    } else {
+      currentLineItems.sort((a, b) => a.x - b.x);
+      lines.push(currentLineItems);
+      currentLineY = item.y;
+      currentLineItems = [item];
+    }
+  }
+  if (currentLineItems.length > 0) {
+    currentLineItems.sort((a, b) => a.x - b.x);
+    lines.push(currentLineItems);
+  }
+  
+  let reconstructed = '';
+  for (const line of lines) {
+    let lineStr = '';
+    let lastX = null;
+    
+    for (const item of line) {
+      if (lastX !== null) {
+        const gap = item.x - lastX;
+        // Inject physical tab delimiters when column separations exceed standard margins
+        if (gap > 12) {
+          lineStr += '\t';
+        } else {
+          lineStr += ' ';
+        }
+      }
+      lineStr += item.text;
+      lastX = item.x + item.width;
+    }
+    reconstructed += lineStr + '\n';
+  }
+  
+  return reconstructed;
+}
+
+let detectedCardData = null;
+
+function extractCardMetadata(text, bankType) {
+  const cleanText = text.replace(/\s+/g, ' ');
+  
+  let outstanding = 0;
+  let limit = 0;
+  let dueDate = '';
+  let minDue = 0;
+  let name = '';
+  
+  if (bankType === 'icici-cc') {
+    name = "ICICI Credit Card";
+  } else if (bankType === 'amex') {
+    name = "American Express Card";
+  } else if (bankType === 'sc') {
+    name = "Standard Chartered Card";
+  } else {
+    name = "Credit Card";
+  }
+  
+  const outPatterns = [
+    /(?:total\s+amount\s+due|total\s+due|amount\s+due|outstanding\s+balance|total\s+outstanding)\D*?([\d,]+\.\d{2})/i,
+    /(?:payment\s+due|due\s+amount)\D*?([\d,]+\.\d{2})/i
+  ];
+  for (const pattern of outPatterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      outstanding = parseFloat(match[1].replace(/,/g, ''));
+      break;
+    }
+  }
+  
+  const limitPatterns = [
+    /(?:credit\s+limit|card\s+limit|credit\s+limit\s+rs)\D*?([\d,]+\.\d{2})/i,
+    /(?:credit\s+limit|card\s+limit|limit)\D*?([\d,]+)\b/i
+  ];
+  for (const pattern of limitPatterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      limit = parseFloat(match[1].replace(/,/g, ''));
+      break;
+    }
+  }
+  
+  const duePatterns = [
+    /(?:payment\s+due\s+date|due\s+date|pay\s+by)\s*[:=-]?\s*([a-zA-Z0-9\s,\/-]{8,15})/i,
+    /\b\d{2}[-\/\.]\d{2}[-\/\.]\d{4}\b/
+  ];
+  for (const pattern of duePatterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      const dt = parseDate(match[1] || match[0], 'DD/MM/YYYY') || parseDate(match[1] || match[0], 'DD MMM YYYY') || parseDate(match[1] || match[0], 'YYYY-MM-DD');
+      if (dt) {
+        dueDate = dt;
+        break;
+      }
+    }
+  }
+  
+  const minPatterns = [
+    /(?:minimum\s+amount\s+due|minimum\s+due|min\s+due)\D*?([\d,]+\.\d{2})/i,
+    /(?:minimum\s+due|min\s+due)\D*?([\d,]+)\b/i
+  ];
+  for (const pattern of minPatterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      minDue = parseFloat(match[1].replace(/,/g, ''));
+      break;
+    }
+  }
+  
+  if (outstanding === 0) {
+    const numbers = cleanText.replace(/,/g, '').match(/\b\d{4,6}\.\d{2}\b/g);
+    if (numbers) {
+      outstanding = Math.max(...numbers.map(Number));
+    }
+  }
+  if (limit === 0) limit = 150000;
+  if (minDue === 0 && outstanding > 0) minDue = Math.round(outstanding * 0.05);
+  
+  return { name, outstanding, limit, dueDate, minDue };
+}
+
+function extractNpsBalances(text) {
+  const cleanText = text.replace(/\s+/g, ' ');
+  
+  let pran = '';
+  const pranPatterns = [
+    /pran\s*[:=-]?\s*(\d{12})\b/i,
+    /permanent\s*retirement\s*account\s*number\s*[:=-]?\s*(\d{12})\b/i,
+    /pran\D*?(\d{12})\b/i,
+    /\b(\d{12})\b/
+  ];
+  for (const pattern of pranPatterns) {
+    const match = cleanText.match(pattern);
+    if (match) { pran = match[1]; break; }
+  }
+
+  let tier1 = 0;
+  const t1Patterns = [
+    /tier\s*i\s*(?:account|holding|investment|valuation|portfolio)?\s*(?:value|balance|worth)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*i\s*.*?(?:value|balance|holding)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*1\s*.*?(?:value|balance|holding)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*i\D*?([\d,]+\.\d{2})/i,
+    /tier\s*1\D*?([\d,]+\.\d{2})/i
+  ];
+  for (const pattern of t1Patterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      const val = parseFloat(match[1].replace(/,/g, ''));
+      if (val > 0) { tier1 = val; break; }
+    }
+  }
+
+  let tier2 = 0;
+  const t2Patterns = [
+    /tier\s*ii\s*(?:account|holding|investment|valuation|portfolio)?\s*(?:value|balance|worth)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*ii\s*.*?(?:value|balance|holding)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*2\s*.*?(?:value|balance|holding)\D*?([\d,]+\.\d{2})/i,
+    /tier\s*ii\D*?([\d,]+\.\d{2})/i,
+    /tier\s*2\D*?([\d,]+\.\d{2})/i
+  ];
+  for (const pattern of t2Patterns) {
+    const match = cleanText.match(pattern);
+    if (match) {
+      const val = parseFloat(match[1].replace(/,/g, ''));
+      if (val > 0) { tier2 = val; break; }
+    }
+  }
+
+  return { pran, tier1, tier2 };
+}
+
+function parseBankStatementPdf(text, bankType) {
+  const lines = text.split('\n');
+  const txns = [];
+
+  // Matches DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY AND DD MMM YYYY (e.g. "05 Jun 2026")
+  const dateReg = /\b(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4}|\d{2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4})\b/i;
+  // Finds all monetary amounts: optional ₹, digits with commas, mandatory 2-decimal
+  const amtReg = /(?:₹\s*)?([\d,]+\.\d{2})/g;
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+
+    const dateMatch = line.match(dateReg);
+    if (!dateMatch) continue;
+
+    const dateStr = parseDate(dateMatch[1], 'DD/MM/YYYY') ||
+                    parseDate(dateMatch[1], 'YYYY-MM-DD') ||
+                    parseDate(dateMatch[1], 'DD MMM YYYY') ||
+                    parseDate(dateMatch[1], 'MM/DD/YYYY');
+    if (!dateStr) continue;
+
+    const allAmts = [...line.matchAll(amtReg)].map(m => ({
+      raw: m[0], val: parseFloat(m[1].replace(/,/g, '')), idx: m.index
+    }));
+    if (allAmts.length === 0) continue;
+
+    let amount = 0, type = 'debit', desc = '';
+
+    if (bankType === 'icici-salary' && allAmts.length >= 3) {
+      // Savings statement: [withdrawal, deposit, balance] — use whichever of first two is non-zero
+      const withdrawal = allAmts[allAmts.length - 3]?.val || 0;
+      const deposit = allAmts[allAmts.length - 2]?.val || 0;
+      if (deposit > 0) { amount = deposit; type = 'credit'; }
+      else { amount = withdrawal; type = 'debit'; }
+      // Description: from second date (value date) to first amount
+      const dates2 = [...line.matchAll(/\b(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/g)];
+      const afterDate = dates2.length >= 2
+        ? line.indexOf(dates2[1][0]) + dates2[1][0].length
+        : dateMatch.index + dateMatch[0].length;
+      desc = line.substring(afterDate, allAmts[0].idx).trim();
+    } else {
+      // Universal credit card / savings fallback:
+      // Prefer amount with explicit Dr/Cr suffix; otherwise use first amount on line
+      const drCrMatch = line.match(/([\d,]+\.\d{2})\s*(Dr\.?|Cr\.?)\b/i);
+      if (drCrMatch) {
+        amount = parseFloat(drCrMatch[1].replace(/,/g, ''));
+        type = /cr/i.test(drCrMatch[2]) ? 'credit' : 'debit';
+      } else {
+        // Negative sign = payment/refund (Amex style); otherwise first amount = spend
+        const signedMatch = line.match(/(-)([\d,]+\.\d{2})/);
+        if (signedMatch) {
+          amount = parseFloat(signedMatch[2].replace(/,/g, ''));
+          type = 'credit';
+        } else {
+          amount = allAmts[0].val;
+          type = /payment|refund|cashback|reversal|\bcr\b/i.test(line) ? 'credit' : 'debit';
+        }
+      }
+      // Description: text between end of date and the first numeric amount
+      const dateEndIdx = dateMatch.index + dateMatch[0].length;
+      const firstAmtIdx = allAmts[0].idx;
+      desc = dateEndIdx < firstAmtIdx
+        ? line.substring(dateEndIdx, firstAmtIdx).trim()
+        : line.substring(dateEndIdx).replace(/(?:₹\s*)?[\d,]+\.\d{2}.*/g, '').trim();
+    }
+
+    desc = desc.replace(/^[\s\-,|\/]+/, '').replace(/[\s\-,|\/]+$/, '');
+    if (!desc || desc.length < 2) desc = 'Transaction';
+
+    if (amount > 0) {
+      txns.push({ date: dateStr, desc, amount, type, cat: autoCategory(desc, amount) });
+    }
+  }
+  return txns;
+}
+
+// ─────────────────────────────────────────────
+// REWARD PROGRAMS LOOKUP
+// ─────────────────────────────────────────────
+const REWARD_PROGRAMS = {
+  'amex-platinum-reserve': {
+    label: 'Amex Platinum Reserve MR',
+    color: '#1a3a6e',
+    defaultRate: 0.50,
+    note: '1 MR pt/₹50 base · 5X promo active till Jan 2027 · 3X at Reward Multiplier merchants · Fee ₹10,000 (waived at ₹10L annual spend)',
+    earnRates: [
+      { category: '5X Promo (till Jan 2027)',         ptsPerRs100: 10, note: '5X — 5 pts/₹50' },
+      { category: 'Reward Multiplier merchants (3X)', ptsPerRs100: 6,  note: '3X — 3 pts/₹50' },
+      { category: 'All other spends (base)',          ptsPerRs100: 2,  note: '1X — 1 pt/₹50'  },
+    ],
+    options: [
+      { label: 'Air India Miles (transfer)',       ratio: '1:1',       tag: 'Best for long-haul',       multiplier: 1.0 },
+      { label: 'Vistara Club Vistara',             ratio: '1:1',       tag: 'Premium domestic flights', multiplier: 1.0 },
+      { label: 'InterMiles',                       ratio: '1:1',       tag: 'Domestic + Middle East',   multiplier: 1.0 },
+      { label: 'Singapore KrisFlyer',              ratio: '2:1',       tag: 'International luxury',     multiplier: 0.5 },
+      { label: 'Amazon / Myntra vouchers',         ratio: '₹0.25/pt',  tag: 'Easy cashout',             cashValue: 0.25 },
+      { label: 'Select & Pay (statement credit)',  ratio: '₹0.25/pt',  tag: 'Direct credit',            cashValue: 0.25 },
+    ]
+  },
+  amex: {
+    label: 'Amex Membership Rewards',
+    color: '#2c6fad',
+    defaultRate: 0.50,
+    options: [
+      { label: 'Air India Miles',            ratio: '1:1',       tag: 'Best for long-haul',  multiplier: 1.0 },
+      { label: 'InterMiles',                 ratio: '1:1',       tag: 'Domestic travel',      multiplier: 1.0 },
+      { label: 'Vistara Club Vistara',       ratio: '1:1',       tag: 'Premium flights',      multiplier: 1.0 },
+      { label: 'Singapore KrisFlyer',        ratio: '2:1',       tag: 'International luxury', multiplier: 0.5 },
+      { label: 'Marriott Bonvoy',            ratio: '1:1',       tag: 'Hotel stays',          multiplier: 1.0 },
+      { label: 'Amazon / Flipkart voucher',  ratio: '₹0.25/pt',  tag: 'Easy cashout',         cashValue: 0.25 },
+    ]
+  },
+  'icici-emeralde': {
+    label: 'ICICI Emeralde Private Metal',
+    color: '#b8860b',
+    defaultRate: 1.0,
+    note: 'Base 6 pts/₹200 · 6X on flights · 12X on hotels via iShop · Pts expire 2 yrs from earn date',
+    earnRates: [
+      { category: 'Hotels via iShop',   ptsPerRs100: 36, note: '12X' },
+      { category: 'Flights via iShop',  ptsPerRs100: 18, note: '6X'  },
+      { category: 'All other spends',   ptsPerRs100: 3,  note: '1X (base)' },
+    ],
+    options: [
+      { label: 'Flights / Hotels (iShop)',         ratio: '₹1.00/pt',  tag: 'Best value',     cashValue: 1.00 },
+      { label: 'Apple, Tanishq, Tumi vouchers',    ratio: '₹1.00/pt',  tag: 'Premium brands', cashValue: 1.00 },
+      { label: 'Taj Epicure / EazyDiner',          ratio: '₹1.00/pt',  tag: 'Dining & stays', cashValue: 1.00 },
+      { label: 'Reward catalogue (general)',       ratio: '₹0.60/pt',  tag: 'Catalogue',      cashValue: 0.60 },
+      { label: 'Statement balance credit',         ratio: '₹0.40/pt',  tag: 'Cashback',       cashValue: 0.40 },
+    ]
+  },
+  icici: {
+    label: 'ICICI Reward Points',
+    color: '#e85d04',
+    defaultRate: 0.25,
+    options: [
+      { label: 'Flipkart vouchers',          ratio: '₹0.25/pt',  tag: 'Best value',      cashValue: 0.25 },
+      { label: 'Flight bookings via ICICI',  ratio: '₹0.25/pt',  tag: 'Travel',          cashValue: 0.25 },
+      { label: 'BookMyShow',                 ratio: '₹0.20/pt',  tag: 'Entertainment',   cashValue: 0.20 },
+      { label: 'Statement cashback',         ratio: '₹0.15/pt',  tag: 'Direct credit',   cashValue: 0.15 },
+    ]
+  },
+  hdfc: {
+    label: 'HDFC Reward Points',
+    color: '#004c8f',
+    defaultRate: 0.20,
+    options: [
+      { label: 'SmartBuy — Gold / vouchers', ratio: '₹0.20/pt',  tag: 'Best value',      cashValue: 0.20 },
+      { label: 'InterMiles / Air India',     ratio: '5:4',        tag: 'Travel miles',    multiplier: 0.80 },
+      { label: 'Amazon / Flipkart',          ratio: '₹0.20/pt',  tag: 'Shopping',        cashValue: 0.20 },
+      { label: 'Statement cashback',         ratio: '₹0.15/pt',  tag: 'Direct credit',   cashValue: 0.15 },
+    ]
+  },
+  sc: {
+    label: 'Standard Chartered Rewards',
+    color: '#1d8348',
+    defaultRate: 0.20,
+    options: [
+      { label: 'AirAsia BIG Points',         ratio: '2:1',        tag: 'Budget travel',   multiplier: 0.50 },
+      { label: 'Shopping gift vouchers',     ratio: '₹0.20/pt',  tag: 'Shopping',        cashValue: 0.20 },
+      { label: 'Statement credit',           ratio: '₹0.15/pt',  tag: 'Direct credit',   cashValue: 0.15 },
+    ]
+  },
+  axis: {
+    label: 'Axis Edge Rewards',
+    color: '#8e0707',
+    defaultRate: 0.20,
+    options: [
+      { label: 'Air India / Vistara miles',  ratio: '5:4',        tag: 'Frequent flyers', multiplier: 0.80 },
+      { label: 'Hotel points transfer',      ratio: '5:4',        tag: 'Stays',           multiplier: 0.80 },
+      { label: 'Amazon vouchers',            ratio: '₹0.20/pt',  tag: 'Shopping',        cashValue: 0.20 },
+    ]
+  },
+  sbi: {
+    label: 'SBI Reward Points',
+    color: '#1a5276',
+    defaultRate: 0.25,
+    options: [
+      { label: 'Gift vouchers',              ratio: '₹0.25/pt',  tag: 'Shopping',        cashValue: 0.25 },
+      { label: 'Air Miles transfer',         ratio: '4:1',        tag: 'Travel',          multiplier: 0.25 },
+      { label: 'Cashback',                   ratio: '₹0.20/pt',  tag: 'Direct credit',   cashValue: 0.20 },
+    ]
+  },
+  kotak: {
+    label: 'Kotak Reward Points',
+    color: '#ed1c24',
+    defaultRate: 0.25,
+    options: [
+      { label: 'PVR movie tickets',          ratio: '₹0.25/pt',  tag: 'Entertainment',   cashValue: 0.25 },
+      { label: 'Swiggy / Zomato vouchers',   ratio: '₹0.25/pt',  tag: 'Dining',          cashValue: 0.25 },
+      { label: 'Cashback',                   ratio: '₹0.20/pt',  tag: 'Direct credit',   cashValue: 0.20 },
+    ]
+  },
+  default: {
+    label: 'Reward Points',
+    color: '#6b7280',
+    defaultRate: 0.25,
+    options: [
+      { label: 'Vouchers / Gift cards',      ratio: '₹0.20-0.25/pt', tag: 'Shopping',    cashValue: 0.22 },
+      { label: 'Cashback / Statement credit',ratio: '₹0.15-0.20/pt', tag: 'Direct credit',cashValue: 0.18 },
+      { label: 'Miles transfer (if avail.)', ratio: 'Varies',         tag: 'Travel',      cashValue: 0.25 },
+    ]
+  }
+};
+
+function detectRewardProgram(name) {
+  const n = (name || '').toLowerCase();
+  if (/emeralde/i.test(n))                                          return 'icici-emeralde';
+  if (/platinum.{0,10}reserve|reserve.{0,10}platinum/i.test(n))    return 'amex-platinum-reserve';
+  if (/amex|american express/i.test(n))                             return 'amex';
+  if (/icici/i.test(n))                                             return 'icici';
+  if (/hdfc/i.test(n))                                              return 'hdfc';
+  if (/standard chartered|stanchart/i.test(n))                      return 'sc';
+  if (/axis/i.test(n))                                              return 'axis';
+  if (/sbi/i.test(n))                                               return 'sbi';
+  if (/kotak/i.test(n))                                             return 'kotak';
+  return 'default';
+}
+
+function migrateRewards() {
+  if (Array.isArray(D.rewards)) return;
+  const keyToName = { 'amex': 'American Express', 'icici-cc': 'ICICI Credit Card' };
+  const arr = [];
+  let t = 1;
+  for (const k in D.rewards) {
+    const r = D.rewards[k];
+    const name = keyToName[k] || k;
+    arr.push({
+      id: Date.now() + t++,
+      name,
+      program: detectRewardProgram(name),
+      points: r.points || 0,
+      rate: r.rate || 0.25,
+      expiry: r.expiry || '',
+      tier: r.tier || ''
+    });
+  }
+  D.rewards = arr;
+  save();
+}
 
 const BANK_CONFIGS = {
   'icici-salary': {
@@ -2282,60 +3935,100 @@ const BANK_CONFIGS = {
     skipRows:1,
     parse(row) {
       const o = row[0] === "" ? 1 : 0;
-      const desc = row[4+o];
-      if (!desc) return null;
-      const date = parseDate(row[2+o],'DD/MM/YYYY') || parseDate(row[2+o],'YYYY-MM-DD');
+      const desc = row[4+o] || "Transaction";
+      const date = parseDate(row[2+o],'DD/MM/YYYY') || parseDate(row[2+o],'YYYY-MM-DD') || parseDate(row[2+o],'MM/DD/YYYY');
       if (!date) return null;
       const debit = cleanAmt(row[5+o]), credit = cleanAmt(row[6+o]);
       if (debit===0 && credit===0) return null;
-      return {date, desc:desc.trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(desc)};
+      return {date, desc:desc.toString().trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(desc.toString(), debit||credit)};
     }
   },
   'icici-cc': {
     label:'ICICI Credit Card', account:'icici-cc',
-    hint:'ICICI CC CSV: Date, Description, Amount',
+    hint:'ICICI CC XLS: Transaction Date, Details, Amount (INR), Reference Number',
     skipRows:1,
     parse(row) {
-      if (!row[1]) return null;
-      const date = parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD');
+      // XLS export has merged cells — data lands at cols 0, 4, 8, 12
+      const desc = (row[4] || row[1] || '').toString().trim();
+      if (!desc) return null;
+      const date = parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD') || parseDate(row[0],'DD-MM-YYYY');
       if (!date) return null;
-      const amt = cleanAmt(row[2]||row[3]);
-      if (amt===0) return null;
-      const isCredit = (row[2]||'').trim()===''&&cleanAmt(row[3])>0;
-      return {date, desc:row[1].trim(), amount:Math.abs(amt), type:isCredit?'credit':'debit', cat:autoCategory(row[1])};
+      const amtStr = (row[8] || row[2] || '').toString().trim();
+      if (!amtStr) return null;
+      const isCredit = /\bcr\.?\s*$/i.test(amtStr) || /payment|refund|cashback/i.test(desc);
+      const rawAmt = parseFloat(amtStr.replace(/[₹,\s]/g, ''));
+      if (!rawAmt || rawAmt === 0) return null;
+      const amount = Math.abs(rawAmt);
+      return {date, desc, amount, type:isCredit?'credit':'debit', cat:autoCategory(desc, amount)};
     }
   },
   'sc': {
     label:'Standard Chartered', account:'sc-savings',
-    hint:'SC CSV: Transaction Date, Description, Debit Amount, Credit Amount',
+    hint:'SC CSV: Date, Transaction, Currency, Deposit, Withdrawal, Running Balance',
     skipRows:1,
     parse(row) {
       if (!row[1]) return null;
       const date = parseDate(row[0],'DD MMM YYYY') || parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD');
       if (!date) return null;
-      const debit = cleanAmt(row[2]), credit = cleanAmt(row[3]);
+      const credit = cleanAmt(row[3]), debit = cleanAmt(row[4]);
       if (debit===0&&credit===0) return null;
-      return {date, desc:row[1].trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(row[1])};
+      return {date, desc:row[1].trim(), amount:debit||credit, type:debit>0?'debit':'credit', cat:autoCategory(row[1], debit||credit)};
     }
   },
   'amex': {
     label:'American Express', account:'amex',
-    hint:'Amex CSV: Date, Description, Amount (positive=spend)',
+    hint:'Amex CSV: Date, Description, Amount, extended details, APPEARS on your statement as, reference',
     skipRows:1,
     parse(row) {
-      if (!row[1]) return null;
+      // Columns: 0=Date, 1=Description, 2=Amount, 3=extended details, 4=APPEARS on your statement as, 5=reference
+      const desc = (row[1] || row[4] || '').toString().trim();
+      if (!desc) return null;
       const date = parseDate(row[0],'DD/MM/YYYY') || parseDate(row[0],'YYYY-MM-DD') || parseDate(row[0],'MM/DD/YYYY');
       if (!date) return null;
       const rawAmt = cleanAmtSigned(row[2]);
-      if (rawAmt===0) return null;
-      return {date, desc:row[1].trim(), amount:Math.abs(rawAmt), type:rawAmt>0?'debit':'credit', cat:autoCategory(row[1])};
+      if (rawAmt === 0) return null;
+      // Amex: positive = spend (debit), negative = payment/refund (credit)
+      const isCredit = rawAmt < 0 || /payment|refund|cashback|cr/i.test(desc);
+      return {date, desc, amount:Math.abs(rawAmt), type:isCredit?'credit':'debit', cat:autoCategory(desc, Math.abs(rawAmt))};
     }
+  },
+  'nps': {
+    label:'NPS Statement', account:'nps',
+    hint:'NPS Excel/CSV: Auto-detects PRAN and Tier I / Tier II balances.',
+    skipRows:0,
+    parse(row) { return null; }
   }
 };
 
 function parseDate(str, fmt) {
   if (!str) return null;
   str = str.trim().replace(/"/g,'');
+  try {
+    // Robust parsing for dash/dot/slash formats
+    const cleanStr = str.replace(/[-\.]/g, '/');
+    if (/[a-zA-Z]/.test(cleanStr)) {
+      const dt = new Date(cleanStr);
+      if (!isNaN(dt)) return dt.toISOString().split('T')[0];
+    }
+    const parts = cleanStr.split('/');
+    if (parts.length === 3) {
+      let [d, m, y] = parts.map(Number);
+      if (y < 100) y += 2000;
+      if (fmt === 'DD/MM/YYYY' || fmt === 'DD MMM YYYY') {
+        const dt = new Date(y, m - 1, d);
+        return isNaN(dt) ? null : dt.toISOString().split('T')[0];
+      }
+      if (fmt === 'MM/DD/YYYY') {
+        const dt = new Date(y, d - 1, m);
+        return isNaN(dt) ? null : dt.toISOString().split('T')[0];
+      }
+      if (fmt === 'YYYY-MM-DD') {
+        const dt = new Date(cleanStr);
+        return isNaN(dt) ? null : dt.toISOString().split('T')[0];
+      }
+    }
+  } catch(e) {}
+  // Fallback to basic string splitting if everything else fails
   try {
     if (fmt==='DD/MM/YYYY') {
       const [d,m,y] = str.split('/');
@@ -2357,7 +4050,7 @@ function parseDate(str, fmt) {
       const dt = new Date(y,m-1,d);
       return isNaN(dt)?null:dt.toISOString().split('T')[0];
     }
-  } catch(e) {}
+  } catch(ex) {}
   const dt = new Date(str);
   return isNaN(dt)?null:dt.toISOString().split('T')[0];
 }
@@ -2374,9 +4067,15 @@ function cleanAmtSigned(s) {
   return isNaN(n)?0:n;
 }
 
-function autoCategory(desc) {
+function autoCategory(desc, amount) {
   if (!desc) return 'Other';
   const d = desc.toLowerCase();
+  const amtNum = Number(amount);
+  
+  // Specific exclusions
+  if (/bajaj electronics/i.test(d)) return 'Shopping';
+  
+  if (!isNaN(amtNum) && Math.abs(amtNum - 23790) < 1) return 'EMI';
   if (/swiggy|zomato|dominos|food|restaurant|cafe|biryani|pizza/i.test(d)) return 'Food & Dining';
   if (/uber|ola|rapido|redbus|irctc|flight|airways|airline|train|makemytrip/i.test(d)) return 'Travel';
   if (/amazon|flipkart|myntra|meesho|nykaa|blinkit|zepto|shopping/i.test(d)) return 'Shopping';
@@ -2386,8 +4085,10 @@ function autoCategory(desc) {
   if (/school|college|udemy|coursera|education|tuition|fees/i.test(d)) return 'Education';
   if (/insurance|lic|hdfc life|bajaj|star health/i.test(d)) return 'Insurance';
   if (/mutual fund|sip|zerodha|groww|upstox|nse|bse|dividend/i.test(d)) return 'Investment';
-  if (/emi|loan|home loan|car loan/i.test(d)) return 'EMI';
-  if (/salary|credit|neft cr|upi cr|rtgs cr/i.test(d)) return 'Salary';
+  if (/\b(charan|himaja|parents|nageswara|nagamma|ponamgi)\b/i.test(d)) return 'Family Transfer';
+  if (/emi|loan|home loan|car loan|finance|bajaj|muthoot|cholamandalam|chola|hdb|home credit|ach debit|nach debit|ecs debit|auto debit|mandate|auto-debit/i.test(d)) return 'EMI';
+  if (/donation|charity|ngo|relief|temple|church|mosque|foundation/i.test(d)) return 'Donation';
+  if (/salary|salaries|credit|neft cr|upi cr|rtgs cr/i.test(d)) return 'Salary';
   return 'Other';
 }
 
@@ -2415,10 +4116,124 @@ function selectBank(bank, btn) {
   parsedRows = [];
 }
 
-function parseCSV(event) {
+async function processPdfParsing(file, pwd) {
+  try {
+    const pdfjs = await ensurePdfJS();
+    const arrayBuffer = await file.arrayBuffer();
+    
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer), password: pwd });
+    const pdf = await loadingTask.promise;
+    
+    let textAll = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      textAll += (reconstructTextWithCoordinates(textContent) || textContent.items.map(s => s.str).join(' ')) + '\n';
+    }
+    
+    pendingPdfFile = null;
+    
+    const importBtn = document.getElementById('importConfirmBtn');
+    if (importBtn) importBtn.style.display = 'inline-block';
+    
+    if (selectedBank === 'nps') {
+      const { pran, tier1, tier2 } = extractNpsBalances(textAll);
+      parsedRows = [{ pran, tier1, tier2 }];
+      
+      document.getElementById('parse-result').style.display = 'block';
+      document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ NPS Data Extracted from PDF</span>`;
+      document.getElementById('parse-preview-table').innerHTML = 
+        `<div class="parse-row"><div class="parse-cell parse-header val">PRAN</div><div class="parse-cell val">${esc(pran || 'Not found')}</div></div>` +
+        `<div class="parse-row"><div class="parse-cell parse-header val">Tier I Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier1||0).toLocaleString('en-IN')}</div></div>` +
+        `<div class="parse-row"><div class="parse-cell parse-header val">Tier II Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier2||0).toLocaleString('en-IN')}</div></div>`;
+      document.getElementById('parse-summary').textContent = `File: ${file.name} (PDF)`;
+      
+    } else {
+      const txns = parseBankStatementPdf(textAll, selectedBank);
+      parsedRows = txns;
+      
+      const isCreditCard = selectedBank === 'icici-cc' || selectedBank === 'amex' || (selectedBank === 'sc' && textAll.toLowerCase().includes('credit card'));
+      if (isCreditCard) {
+        detectedCardData = extractCardMetadata(textAll, selectedBank);
+      } else {
+        detectedCardData = null;
+      }
+      
+      const resultEl = document.getElementById('parse-result');
+      resultEl.style.display = 'block';
+      const statusEl = document.getElementById('parse-status-badge');
+      
+      if (parsedRows.length > 0) {
+        let badgeHtml = `<span class="parse-status parse-ok">✓ ${parsedRows.length} transactions extracted from PDF</span>`;
+        if (detectedCardData) {
+          badgeHtml += ` <span class="parse-status parse-ok" style="background:rgba(123,94,167,0.1);color:#7b5ea7">💳 Detected ${esc(detectedCardData.name)}</span>`;
+        }
+        statusEl.innerHTML = badgeHtml;
+        const previewRows = parsedRows.slice(0, 8);
+        document.getElementById('parse-preview-table').innerHTML = 
+          `<div class="parse-row"><div class="parse-cell parse-header val">Date</div><div class="parse-cell parse-header val">Description</div><div class="parse-cell parse-header val">Amount</div><div class="parse-cell parse-header val">Type</div><div class="parse-cell parse-header val">Category</div></div>` +
+          previewRows.map(t =>
+            `<div class="parse-row"><div class="parse-cell val">${t.date}</div><div class="parse-cell val">${esc(t.desc)}</div><div class="parse-cell val" style="color:var(--accent)">₹${t.amount.toLocaleString('en-IN')}</div><div class="parse-cell val" style="color:${t.type==='debit'?'var(--red)':'var(--green)'}">${t.type}</div><div class="parse-cell val">${t.cat}</div></div>`
+          ).join('');
+      } else {
+        const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const sampleText = textAll.substring(0, 300);
+        statusEl.innerHTML = `<span class="parse-status" style="background:var(--red-light);color:var(--red);white-space:normal;display:block;padding:8px">✗ No transactions extracted. Check bank/card format matches statement.<br><br>Extracted Sample:<br>${escapeHtml(sampleText)}</span>`;
+        document.getElementById('parse-preview-table').innerHTML = '';
+      }
+      
+      document.getElementById('parse-summary').textContent = `File: ${file.name} (PDF) · ${parsedRows.length} valid rows`;
+    }
+  } catch (err) {
+    if (err.name === 'PasswordException') {
+      pendingPdfFile = file;
+      
+      document.getElementById('parse-result').style.display = 'block';
+      document.getElementById('parse-status-badge').innerHTML = 
+        `<span class="parse-status" style="background:var(--red-light);color:var(--red)">🔒 Password Protected</span>`;
+      document.getElementById('parse-preview-table').innerHTML = `
+        <div style="padding:16px;background:var(--surface2);border-radius:6px;border:1px dashed var(--red);text-align:center">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--text)">⚠️ Password Required for ${esc(file.name)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:12px">${pwd ? 'Incorrect password. ' : ''}This statement is encrypted. Enter the correct password below to parse it:</div>
+          <div style="display:flex;gap:8px;justify-content:center;max-width:320px;margin:0 auto">
+            <input class="form-input" type="password" id="inline-pdf-password" placeholder="Enter PDF Password" style="font-size:12px;padding:6px 10px;height:auto">
+            <button class="btn btn-primary btn-sm" onclick="retryPdfUnlock()" style="white-space:nowrap;padding:6px 12px">Unlock & Parse</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('parse-summary').textContent = `File: ${file.name} is encrypted.`;
+      document.getElementById('importConfirmBtn').style.display = 'none';
+      
+      setTimeout(() => {
+        const inlineInput = document.getElementById('inline-pdf-password');
+        if (inlineInput) inlineInput.focus();
+      }, 100);
+    } else {
+      alert("Error parsing PDF: " + err.message);
+      pendingPdfFile = null;
+    }
+  }
+}
+
+async function retryPdfUnlock() {
+  if (!pendingPdfFile) return;
+  const inlinePwdInput = document.getElementById('inline-pdf-password');
+  const pwd = inlinePwdInput ? inlinePwdInput.value : '';
+  await processPdfParsing(pendingPdfFile, pwd);
+}
+
+async function parseCSV(event) {
   const file = event.target.files[0];
   if (!file) return;
   const cfg = BANK_CONFIGS[selectedBank];
+
+  if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    const pwd = document.getElementById('import-pdf-password') ? document.getElementById('import-pdf-password').value : '';
+    await processPdfParsing(file, pwd);
+    event.target.value = '';
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = function(e) {
     let rows = [];
@@ -2440,6 +4255,29 @@ function parseCSV(event) {
     }
 
     parsedRows = [];
+    if (selectedBank === 'nps') {
+      let pran = '', tier1 = 0, tier2 = 0;
+      const textAll = rows.map(r => r.join(' ')).join('\n').toLowerCase();
+      const pranMatch = textAll.match(/pran.*?\b(\d{12})\b/i) || textAll.match(/\b(\d{12})\b/);
+      if (pranMatch) pran = pranMatch[1];
+      const t1Match = textAll.match(/tier\s*i\s*.*?balance.*?([\d,]+(\.\d{1,2})?)/i) 
+                   || textAll.match(/tier\s*i.*?holding.*?([\d,]+(\.\d{1,2})?)/i)
+                   || textAll.match(/tier\s*i.*?value.*?([\d,]+(\.\d{1,2})?)/i);
+      if (t1Match) tier1 = parseFloat(t1Match[1].replace(/,/g, ''));
+      const t2Match = textAll.match(/tier\s*ii\s*.*?balance.*?([\d,]+(\.\d{1,2})?)/i) 
+                   || textAll.match(/tier\s*ii.*?holding.*?([\d,]+(\.\d{1,2})?)/i)
+                   || textAll.match(/tier\s*ii.*?value.*?([\d,]+(\.\d{1,2})?)/i);
+      if (t2Match) tier2 = parseFloat(t2Match[1].replace(/,/g, ''));
+      parsedRows = [{ pran, tier1: tier1||0, tier2: tier2||0 }];
+      document.getElementById('parse-result').style.display = 'block';
+      document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ NPS Data Extracted</span>`;
+      document.getElementById('parse-preview-table').innerHTML = `<div class="parse-row"><div class="parse-cell parse-header val">PRAN</div><div class="parse-cell val">${pran || 'Not found'}</div></div>` +
+                        `<div class="parse-row"><div class="parse-cell parse-header val">Tier I Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier1||0).toLocaleString('en-IN')}</div></div>` +
+                        `<div class="parse-row"><div class="parse-cell parse-header val">Tier II Balance</div><div class="parse-cell val" style="color:var(--green)">₹${(tier2||0).toLocaleString('en-IN')}</div></div>`;
+      document.getElementById('parse-summary').textContent = `File: ${file.name} · Parsed NPS balances.`;
+      event.target.value = '';
+      return;
+    }
     const previewRows = [];
     const skipped = cfg.skipRows || 1;
     let firstFailed = null;
@@ -2471,7 +4309,7 @@ function parseCSV(event) {
     const table = document.getElementById('parse-preview-table');
     table.innerHTML = `<div class="parse-row"><div class="parse-cell parse-header val">Date</div><div class="parse-cell parse-header val">Description</div><div class="parse-cell parse-header val">Amount</div><div class="parse-cell parse-header val">Type</div><div class="parse-cell parse-header val">Category</div></div>` +
       previewRows.filter(r=>!r.header).slice(0,8).map(r =>
-        `<div class="parse-row"><div class="parse-cell val">${r.row.date}</div><div class="parse-cell val">${r.row.desc}</div><div class="parse-cell val" style="color:var(--accent)">₹${r.row.amount.toLocaleString('en-IN')}</div><div class="parse-cell val" style="color:${r.row.type==='debit'?'var(--red)':'var(--green)'}">${r.row.type}</div><div class="parse-cell val">${r.row.cat}</div></div>`
+        `<div class="parse-row"><div class="parse-cell val">${esc(r.row.date)}</div><div class="parse-cell val">${esc(r.row.desc)}</div><div class="parse-cell val" style="color:var(--accent)">₹${r.row.amount.toLocaleString('en-IN')}</div><div class="parse-cell val" style="color:${r.row.type==='debit'?'var(--red)':'var(--green)'}">${esc(r.row.type)}</div><div class="parse-cell val">${esc(r.row.cat)}</div></div>`
       ).join('');
     document.getElementById('parse-summary').textContent =
       `File: ${file.name} · ${rows.length-skipped} rows read · ${parsedRows.length} valid · ${rows.length-skipped-parsedRows.length} skipped`;
@@ -2482,13 +4320,28 @@ function parseCSV(event) {
 
 function confirmImport() {
   if (!parsedRows.length) return;
+  if (selectedBank === 'nps') {
+    const m = currentMember === 'all' ? 'madhu' : currentMember;
+    if (!D.nps[m]) D.nps[m] = {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
+    const data = parsedRows[0];
+    if (data.pran) D.nps[m].pran = data.pran;
+    if (data.tier1) D.nps[m].tier1 = data.tier1;
+    if (data.tier2) D.nps[m].tier2 = data.tier2;
+    snapshotNW(); save(); renderAll();
+    document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ Updated NPS Holdings</span>`;
+    document.getElementById('importConfirmBtn').textContent = 'Done ✓'; 
+    document.getElementById('importConfirmBtn').disabled = true;
+    parsedRows = [];
+    return;
+  }
   const cfg = BANK_CONFIGS[selectedBank];
   const m = currentMember === 'all' ? 'madhu' : currentMember;
   let txnAccountId = '';
 
   if (selectedBank === 'icici-salary' || selectedBank === 'sc') {
     const bankName = selectedBank === 'icici-salary' ? 'ICICI Savings' : 'SC Savings';
-    let existingAcc = D.accounts.find(a => a.member === m && a.name.toLowerCase().includes(bankName.toLowerCase()));
+    const bankKeyword = selectedBank === 'icici-salary' ? 'icici' : 'standard chartered';
+    let existingAcc = D.accounts.find(a => a.member === m && a.name.toLowerCase().includes(bankKeyword));
     if (!existingAcc) {
       existingAcc = {
         id: Date.now() + Math.random(),
@@ -2504,21 +4357,45 @@ function confirmImport() {
     }
     txnAccountId = existingAcc.id;
   } else if (selectedBank === 'icici-cc' || selectedBank === 'amex') {
-    const defaultName = selectedBank === 'icici-cc' ? 'ICICI Credit Card' : 'American Express';
-    let existingCard = D.cards.find(c => c.member === m && c.name.toLowerCase().includes(defaultName.toLowerCase()));
-    if (!existingCard) {
-      existingCard = {
-        id: Date.now() + Math.random(),
-        name: defaultName,
-        member: m,
-        outstanding: 0,
-        limit: 150000,
-        dueDate: '',
-        minDue: 0
-      };
-      D.cards.push(existingCard);
+    if (detectedCardData) {
+      let existingCard = D.cards.find(c => c.member === m && c.name.toLowerCase().includes(detectedCardData.name.toLowerCase()));
+      if (existingCard) {
+        existingCard.outstanding = detectedCardData.outstanding;
+        if (detectedCardData.limit > 0) existingCard.limit = detectedCardData.limit;
+        if (detectedCardData.dueDate) existingCard.dueDate = detectedCardData.dueDate;
+        if (detectedCardData.minDue > 0) existingCard.minDue = detectedCardData.minDue;
+        txnAccountId = existingCard.id;
+      } else {
+        const newCard = {
+          id: Date.now() + Math.random(),
+          name: detectedCardData.name,
+          member: m,
+          outstanding: detectedCardData.outstanding,
+          limit: detectedCardData.limit || 150000,
+          dueDate: detectedCardData.dueDate || '',
+          minDue: detectedCardData.minDue || 0
+        };
+        D.cards.push(newCard);
+        txnAccountId = newCard.id;
+      }
+      detectedCardData = null; // Clear state
+    } else {
+      const defaultName = selectedBank === 'icici-cc' ? 'ICICI Credit Card' : 'American Express';
+      let existingCard = D.cards.find(c => c.member === m && c.name.toLowerCase().includes(defaultName.toLowerCase()));
+      if (!existingCard) {
+        existingCard = {
+          id: Date.now() + Math.random(),
+          name: defaultName,
+          member: m,
+          outstanding: 0,
+          limit: 150000,
+          dueDate: '',
+          minDue: 0
+        };
+        D.cards.push(existingCard);
+      }
+      txnAccountId = existingCard.id;
     }
-    txnAccountId = existingCard.id;
   }
 
   const existing = new Set(D.transactions.map(t => t.date+'|'+t.desc+'|'+t.amount));
@@ -2526,19 +4403,25 @@ function confirmImport() {
   parsedRows.forEach(r => {
     const key = r.date+'|'+r.desc+'|'+r.amount;
     if (existing.has(key)) { dupes++; return; }
+    const cat = r.cat;
+    const type = cat === 'EMI' ? 'debit' : r.type; // Force EMI to always be debit
     D.transactions.unshift({
       id: Date.now()+Math.random(),
-      desc: r.desc, amount: r.amount, type: r.type,
-      cat: r.cat, member: currentMember === 'all' ? 'madhu' : currentMember,
+      desc: r.desc, amount: r.amount, type: type,
+      cat: cat, member: currentMember === 'all' ? 'madhu' : currentMember,
       date: r.date,
       account: txnAccountId
     });
     added++;
   });
   D.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
+
   save(); renderAll();
+  let msg = `✓ Imported ${added} txns`;
+  msg += ` · ${dupes} duplicates skipped`;
+  
   document.getElementById('parse-status-badge').innerHTML =
-    `<span class="parse-status parse-ok">✓ Imported ${added} · ${dupes} duplicates skipped</span>`;
+    `<span class="parse-status parse-ok">${msg}</span>`;
   const btn = document.getElementById('importConfirmBtn');
   btn.textContent = 'Done ✓'; btn.disabled = true;
   parsedRows = [];
@@ -2552,3 +4435,4 @@ document.getElementById('m-txn-date').value = new Date().toISOString().split('T'
 selectBank('icici-salary', document.querySelector('.bank-tab'));
 updateHideNumbersButton();
 renderAll();
+
