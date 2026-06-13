@@ -891,12 +891,21 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
     <!-- ══════════ INVESTMENTS ══════════ -->
     <div class="view" id="view-investments">
       <div class="summary-grid g3">
-        <div class="summary-card card-gold"><div class="card-label">Total Invested</div><div class="card-value gold" id="inv-cost">₹0</div></div>
-        <div class="summary-card card-green"><div class="card-label">Current Value</div><div class="card-value positive" id="inv-val">₹0</div></div>
-        <div class="summary-card card-teal"><div class="card-label">Unrealised P&amp;L</div><div class="card-value teal" id="inv-pnl">₹0</div></div>
+        <div class="summary-card card-gold"><div class="card-label" id="inv-cost-card-label">Total Invested</div><div class="card-value gold" id="inv-cost">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label" id="inv-val-card-label">Current Value</div><div class="card-value positive" id="inv-val">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label" id="inv-pnl-card-label">Unrealised P&amp;L</div><div class="card-value teal" id="inv-pnl">₹0</div></div>
       </div>
       <div class="panel">
-        <div class="panel-header"><span class="panel-title">Portfolio</span><button class="panel-action" onclick="openAddInv()">+ Add</button></div>
+        <div class="panel-header">
+          <span class="panel-title">Portfolio</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:11px;color:var(--muted);white-space:nowrap">View in</label>
+            <select id="inv-display-currency" onchange="setInvDisplayCurrency(this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);cursor:pointer;height:26px">
+              <option value="INR">₹ INR</option>
+            </select>
+            <button class="panel-action" onclick="openAddInv()">+ Add</button>
+          </div>
+        </div>
         <div class="panel-body">
           <table class="data-table">
             <thead><tr><th>Name</th><th>Type</th><th>Member</th><th>Invested</th><th>Current Value</th><th>Returns</th></tr></thead>

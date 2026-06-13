@@ -1178,6 +1178,28 @@ function calcVestedUnits(inv) {
 const CURRENCY_SYMBOLS = {INR:'₹',USD:'$',EUR:'€',GBP:'£',SGD:'S$',AED:'AED ',JPY:'¥',AUD:'A$',CAD:'C$'};
 function getCurrSymbol(c) { return CURRENCY_SYMBOLS[c] || '₹'; }
 
+let invDisplayCurrency = 'INR';
+
+function getPortfolioCurrencies() {
+  const seen = new Set(['INR']);
+  D.investments.forEach(inv => { if (inv.currency && inv.currency !== 'INR') seen.add(inv.currency); });
+  return [...seen];
+}
+
+function getInvDisplayRate(targetCurrency) {
+  if (targetCurrency === 'INR') return 1;
+  // Use the exchange rate from the most recently saved investment with that currency
+  const match = [...D.investments]
+    .filter(i => i.currency === targetCurrency && i.exchangeRate > 0)
+    .sort((a, b) => b.id - a.id)[0];
+  return match ? match.exchangeRate : 1;
+}
+
+function setInvDisplayCurrency(currency) {
+  invDisplayCurrency = currency;
+  renderInv();
+}
+
 function isEsopType(type) {
   return type === 'ESOP' || type === 'RSU';
 }
@@ -2361,13 +2383,38 @@ function renderInv() {
 
   const list = filterByMember(D.investments);
   const cost = list.reduce((s,i)=>s+i.cost,0);
-  const val = list.reduce((s,i)=>s+i.value,0);
-  const pnl = val - cost;
-  document.getElementById('inv-cost').textContent = fmt(cost);
-  document.getElementById('inv-val').textContent = fmt(val);
+  const val  = list.reduce((s,i)=>s+i.value,0);
+  const pnl  = val - cost;
+
+  // Populate the "View in" selector with currencies actually present in the portfolio
+  const portfolioCurrencies = getPortfolioCurrencies();
+  const currSelect = document.getElementById('inv-display-currency');
+  if (currSelect) {
+    if (!portfolioCurrencies.includes(invDisplayCurrency)) invDisplayCurrency = 'INR';
+    currSelect.innerHTML = portfolioCurrencies.map(c =>
+      `<option value="${c}" ${c === invDisplayCurrency ? 'selected' : ''}>${getCurrSymbol(c)} ${c}</option>`
+    ).join('');
+  }
+
+  // Convert INR totals to the chosen display currency
+  const displayRate = getInvDisplayRate(invDisplayCurrency);
+  const displaySym  = getCurrSymbol(invDisplayCurrency);
+  const isINR       = invDisplayCurrency === 'INR';
+  const dCost = isINR ? cost : Math.round(cost / displayRate);
+  const dVal  = isINR ? val  : Math.round(val  / displayRate);
+  const dPnl  = isINR ? pnl  : Math.round(pnl  / displayRate);
+  const fmtD  = n => numbersHidden ? `${displaySym} ••••` : displaySym + Math.abs(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+
+  document.getElementById('inv-cost').textContent = fmtD(dCost);
+  document.getElementById('inv-val').textContent  = fmtD(dVal);
+  [
+    ['inv-cost-card-label', isINR ? 'Total Invested' : `Total Invested (${invDisplayCurrency})`],
+    ['inv-val-card-label',  isINR ? 'Current Value'  : `Current Value (${invDisplayCurrency})`],
+    ['inv-pnl-card-label',  isINR ? 'Unrealised P&L' : `Unrealised P&L (${invDisplayCurrency})`],
+  ].forEach(([id, text]) => { const e = document.getElementById(id); if (e) e.textContent = text; });
   const el = document.getElementById('inv-pnl');
-  el.textContent = (pnl>=0?'+':'−') + fmt(Math.abs(pnl));
-  el.className = 'card-value ' + (pnl >= 0 ? 'positive' : 'negative');
+  el.textContent = (dPnl>=0?'+':'−') + fmtD(Math.abs(dPnl));
+  el.className = 'card-value ' + (dPnl >= 0 ? 'positive' : 'negative');
   const tbody = document.getElementById('inv-rows');
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">↗</div>No investments</div></td></tr>';
