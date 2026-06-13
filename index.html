@@ -890,17 +890,32 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
 
     <!-- ══════════ INVESTMENTS ══════════ -->
     <div class="view" id="view-investments">
-      <!-- Overall Portfolio Split Bar -->
-      <div class="summary-card" style="margin-bottom:20px">
-        <div class="card-label">India · Global Split</div>
-        <div style="margin-top:10px">
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px">
-            <span id="inv-india-pct-label">🇮🇳 —</span>
-            <span id="inv-global-pct-label">🌐 —</span>
+      <!-- Overall Portfolio Split Bar + History Chart -->
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:16px">
+        <div class="summary-card" style="margin-bottom:0">
+          <div class="card-label">India · Global Split</div>
+          <div style="margin-top:10px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px">
+              <span id="inv-india-pct-label">🇮🇳 —</span>
+              <span id="inv-global-pct-label">🌐 —</span>
+            </div>
+            <div style="background:var(--surface2);border-radius:4px;height:8px;overflow:hidden;display:flex">
+              <div id="inv-india-pct-bar" style="height:100%;background:var(--accent);border-radius:4px 0 0 4px;transition:width .4s;width:0%"></div>
+              <div id="inv-global-pct-bar" style="height:100%;background:var(--accent2);border-radius:0 4px 4px 0;transition:width .4s;width:0%"></div>
+            </div>
           </div>
-          <div style="background:var(--surface2);border-radius:4px;height:8px;overflow:hidden;display:flex">
-            <div id="inv-india-pct-bar" style="height:100%;background:var(--accent);border-radius:4px 0 0 4px;transition:width .4s;width:0%"></div>
-            <div id="inv-global-pct-bar" style="height:100%;background:var(--accent2);border-radius:0 4px 4px 0;transition:width .4s;width:0%"></div>
+          <div id="inv-split-vals" style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:8px">
+            <span id="inv-india-val-label"></span>
+            <span id="inv-global-val-label"></span>
+          </div>
+        </div>
+        <div class="panel" style="margin-bottom:0;padding:0">
+          <div class="panel-header" style="padding:10px 14px 6px">
+            <span class="panel-title" style="font-size:12px">Portfolio Value History</span>
+            <span id="inv-chart-empty" style="font-size:10px;color:var(--muted)">Save investments to start tracking</span>
+          </div>
+          <div style="height:72px;padding:0 8px 8px">
+            <canvas id="inv-chart-canvas"></canvas>
           </div>
         </div>
       </div>
@@ -946,6 +961,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
               <select id="inv-display-currency" onchange="setInvDisplayCurrency(this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);cursor:pointer;height:26px">
                 <option value="INR">₹ INR</option>
               </select>
+              <button class="panel-action" onclick="openFxModal()">FX Rates</button>
               <button class="panel-action" onclick="openAddInv()">+ Add</button>
             </div>
           </div>
@@ -985,7 +1001,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
       </div>
       <div class="two-col">
         <div class="panel">
-          <div class="panel-header"><span class="panel-title">EPF Details</span><button class="panel-action" onclick="openModal('epfModal')">Update</button></div>
+          <div class="panel-header"><span class="panel-title">EPF Details</span><button class="panel-action" onclick="openEPFModal()">Update</button></div>
           <div class="panel-body">
             <div class="tax-row"><span class="tax-key">UAN</span><span class="tax-val" id="epf-uan-d">—</span></div>
             <div class="tax-row"><span class="tax-key">Employee Share</span><span class="tax-val" id="epf-emp-d">₹0</span></div>
@@ -1010,6 +1026,13 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
             </div>
             <div class="alert alert-info" style="margin-top:12px"><span>ℹ</span><span>Formula: (Basic+DA × 15/26) × yrs. Tax-free up to ₹20L under Sec 10(10).</span></div>
           </div>
+        </div>
+      </div>
+      <!-- EPF Retirement Projection -->
+      <div class="panel" style="margin-top:0">
+        <div class="panel-header"><span class="panel-title">Retirement Projection</span></div>
+        <div class="panel-body" id="epf-projection-body">
+          <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Add your birth year via Update to see EPF corpus projection at retirement.</span></div>
         </div>
       </div>
       <div class="panel" style="margin-top:0">
@@ -1221,6 +1244,13 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
             </div>
             <div id="tax-verdict" class="alert alert-info" style="margin:0"><span>ℹ</span><span>Enter income to see comparison.</span></div>
           </div>
+        </div>
+      </div>
+      <!-- Capital Gains Panel -->
+      <div class="panel" style="margin-top:0">
+        <div class="panel-header"><span class="panel-title">Capital Gains (Investment Portfolio)</span></div>
+        <div class="panel-body" id="tax-capgains-body">
+          <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Add purchase dates to investments to see LTCG/STCG estimates.</span></div>
         </div>
       </div>
     </div>
@@ -1557,6 +1587,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
       </div>
       <div class="form-group" id="inv-cost-group"><label class="form-label" id="inv-cost-label">Invested (₹)</label><input class="form-input" id="m-inv-cost" type="number" placeholder="0"></div>
       <div class="form-group" id="inv-val-group"><label class="form-label" id="inv-val-label">Current Value (₹)</label><input class="form-input" id="m-inv-val" type="number" placeholder="0"></div>
+      <div class="form-group" id="inv-purchase-date-group"><label class="form-label">Purchase Date <span style="font-size:10px;color:var(--muted)">(for LTCG/STCG)</span></label><input class="form-input" id="m-inv-purchase-date" type="date"></div>
       <!-- ESOP / RSU fields — shown only when type is ESOP or RSU -->
       <div id="esop-fields" style="display:none;grid-column:1/-1">
         <div style="font-size:11px;color:var(--muted);margin:4px 0 10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border);padding-top:12px">Vesting Details</div>
@@ -1733,6 +1764,8 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
       <div class="form-group"><label class="form-label">Employee Share (₹)</label><input class="form-input" id="m-epf-emp" type="number" placeholder="0"></div>
       <div class="form-group"><label class="form-label">Employer Share (₹)</label><input class="form-input" id="m-epf-er" type="number" placeholder="0"></div>
       <div class="form-group"><label class="form-label">Monthly Contribution (₹)</label><input class="form-input" id="m-epf-monthly" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Birth Year <span style="font-size:10px;color:var(--muted)">(for projection)</span></label><input class="form-input" id="m-epf-birthyear" type="number" placeholder="e.g. 1990" min="1940" max="2005"></div>
+      <div class="form-group"><label class="form-label">Target Retirement Age</label><input class="form-input" id="m-epf-retire-age" type="number" placeholder="60" value="60" min="50" max="70"></div>
     </div>
     <div class="modal-actions"><button class="btn" onclick="closeModal('epfModal')">Cancel</button><button class="btn btn-primary" onclick="saveEPF()">Save</button></div>
   </div>
@@ -1854,6 +1887,17 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
     <div class="modal-title">💰 Salary History</div>
     <div id="salary-history-content" style="margin-top:12px"></div>
     <div class="modal-actions"><button class="btn" onclick="closeModal('salaryHistoryModal')">Close</button></div>
+  </div>
+</div>
+
+<!-- FX Rates Modal -->
+<div class="modal-backdrop" id="fxModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('fxModal')">×</button>
+    <div class="modal-title">FX Rates (1 unit = ₹)</div>
+    <div class="form-grid" id="fx-rates-form" style="min-height:60px"></div>
+    <div style="font-size:11px;color:var(--muted);padding:0 0 12px">Updating rates here recomputes all global investments instantly. Rates are also auto-updated when you save an investment.</div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('fxModal')">Cancel</button><button class="btn btn-primary" onclick="saveFxRates()">Save Rates</button></div>
   </div>
 </div>
 

@@ -13,6 +13,7 @@ let nwChartInstance = null;
 let assetChartInstance = null;
 let budgetChartInstance = null;
 let taxChartInstance = null;
+let invChartInstance = null;
 const calendarDate = new Date();
 let selectedCalDay = new Date().getDate();
 
@@ -26,7 +27,8 @@ let D = {
   loans: [],
   gold: [],
   goldRate: 7500,
-  epf:  {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null},
+  fxRates: {},
+  epf:  {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null, birthYear:0, retireAge:60},
   gratuity: {employer:'', joiningDate:'', basicDA:0, actualAccrued:0},
   nps:  {},
   tax:  {gross:0, s80c:0, s80ccd:0, s24b:0, s80d:0, hra:0},
@@ -378,6 +380,7 @@ function openAddInv() {
   document.getElementById('m-inv-fx-rate').value = '';
   document.getElementById('m-inv-cost').value = '';
   document.getElementById('m-inv-val').value = '';
+  document.getElementById('m-inv-purchase-date').value = '';
   toggleEsopFields();
   openModal('invModal');
 }
@@ -404,6 +407,7 @@ function openEditInv(id) {
     // Restore the original foreign-currency amounts the user entered, not the converted INR
     document.getElementById('m-inv-cost').value = inv.costFX !== undefined ? inv.costFX : (inv.cost || 0);
     document.getElementById('m-inv-val').value = inv.valueFX !== undefined ? inv.valueFX : (inv.value || 0);
+    document.getElementById('m-inv-purchase-date').value = inv.purchaseDate || '';
   }
   toggleEsopFields();
   openModal('invModal');
@@ -735,6 +739,11 @@ function saveInv() {
     inv.valueFX = valueFX;
     inv.cost = Math.round(costFX * fxRate);
     inv.value = Math.round(valueFX * fxRate);
+    inv.purchaseDate = document.getElementById('m-inv-purchase-date').value || '';
+  }
+  if (currency !== 'INR' && fxRate > 1) {
+    if (!D.fxRates) D.fxRates = {};
+    D.fxRates[currency] = fxRate;
   }
   upsert(D.investments, inv);
   snapshotNW(); save(); renderAll(); closeModal('invModal');
@@ -1055,6 +1064,18 @@ function saveGratuity() {
   snapshotNW(); save(); renderAll(); closeModal('gratModal');
 }
 
+function openEPFModal() {
+  const e = D.epf;
+  document.getElementById('m-epf-uan').value = e.uan || '';
+  document.getElementById('m-epf-bal').value = e.balance || '';
+  document.getElementById('m-epf-emp').value = e.empShare || '';
+  document.getElementById('m-epf-er').value = e.erShare || '';
+  document.getElementById('m-epf-monthly').value = e.monthly || '';
+  document.getElementById('m-epf-birthyear').value = e.birthYear || '';
+  document.getElementById('m-epf-retire-age').value = e.retireAge || 60;
+  openModal('epfModal');
+}
+
 function saveEPF() {
   D.epf = {
     uan: document.getElementById('m-epf-uan').value,
@@ -1062,7 +1083,9 @@ function saveEPF() {
     empShare: +document.getElementById('m-epf-emp').value || 0,
     erShare: +document.getElementById('m-epf-er').value || 0,
     monthly: +document.getElementById('m-epf-monthly').value || 0,
-    updated: todayStr()
+    updated: todayStr(),
+    birthYear: +document.getElementById('m-epf-birthyear').value || 0,
+    retireAge: +document.getElementById('m-epf-retire-age').value || 60
   };
   snapshotNW(); save(); renderAll(); closeModal('epfModal');
 }
@@ -1188,11 +1211,38 @@ function getPortfolioCurrencies() {
 
 function getInvDisplayRate(targetCurrency) {
   if (targetCurrency === 'INR') return 1;
-  // Use the exchange rate from the most recently saved investment with that currency
+  if (D.fxRates && D.fxRates[targetCurrency] > 0) return D.fxRates[targetCurrency];
   const match = [...D.investments]
     .filter(i => i.currency === targetCurrency && i.exchangeRate > 0)
     .sort((a, b) => b.id - a.id)[0];
   return match ? match.exchangeRate : 1;
+}
+
+function openFxModal() {
+  const currencies = [...new Set(D.investments.filter(i => i.currency && i.currency !== 'INR').map(i => i.currency))];
+  const form = document.getElementById('fx-rates-form');
+  if (!currencies.length) {
+    form.innerHTML = '<div class="alert alert-info" style="grid-column:1/-1;margin:0"><span>ℹ</span><span>No non-INR investments found. Add global investments first.</span></div>';
+  } else {
+    form.innerHTML = currencies.map(c => {
+      const current = (D.fxRates && D.fxRates[c]) ? D.fxRates[c] : getInvDisplayRate(c);
+      return `<div class="form-group"><label class="form-label">${getCurrSymbol(c)} ${c} → ₹ (1 ${c} = ₹)</label><input class="form-input" id="fx-rate-${c}" type="number" step="0.01" value="${current || ''}" placeholder="e.g. 85"></div>`;
+    }).join('');
+  }
+  openModal('fxModal');
+}
+
+function saveFxRates() {
+  const currencies = [...new Set(D.investments.filter(i => i.currency && i.currency !== 'INR').map(i => i.currency))];
+  if (!D.fxRates) D.fxRates = {};
+  currencies.forEach(c => {
+    const val = +document.getElementById(`fx-rate-${c}`).value || 0;
+    if (val > 0) {
+      D.fxRates[c] = val;
+      D.investments.forEach(inv => { if (inv.currency === c) inv.exchangeRate = val; });
+    }
+  });
+  snapshotNW(); save(); renderAll(); closeModal('fxModal');
 }
 
 function setInvDisplayCurrency(currency) {
@@ -1209,7 +1259,10 @@ function toggleCurrencyFields() {
   const isNonINR = currency !== 'INR';
   const sym = getCurrSymbol(currency);
   document.getElementById('inv-fx-rate-group').style.display = isNonINR ? '' : 'none';
-  // Update labels so user knows which currency they're entering amounts in
+  if (isNonINR) {
+    const fxInput = document.getElementById('m-inv-fx-rate');
+    if (!fxInput.value && D.fxRates && D.fxRates[currency] > 0) fxInput.value = D.fxRates[currency];
+  }
   document.getElementById('inv-cost-label').textContent = `Invested (${sym})`;
   document.getElementById('inv-val-label').textContent = `Current Value (${sym})`;
   document.getElementById('inv-grant-price-label').textContent = `Grant / Strike Price (${sym}/unit)`;
@@ -1222,6 +1275,7 @@ function toggleEsopFields() {
   document.getElementById('esop-fields').style.display = esop ? '' : 'none';
   document.getElementById('inv-cost-group').style.display = esop ? 'none' : '';
   document.getElementById('inv-val-group').style.display = esop ? 'none' : '';
+  document.getElementById('inv-purchase-date-group').style.display = esop ? 'none' : '';
   toggleCurrencyFields();
 }
 
@@ -1288,7 +1342,7 @@ function snapshotNW() {
 
   const month = new Date().toLocaleDateString('en-IN',{month:'short',year:'2-digit'});
   const i = D.nwHistory.findIndex(h => h.m === month);
-  const entry = { m: month, v: nw, assets: assetsVal, liabs: liabsVal };
+  const entry = { m: month, v: nw, assets: assetsVal, liabs: liabsVal, inv };
   if (i >= 0) D.nwHistory[i] = entry;
   else D.nwHistory.push(entry);
   if (D.nwHistory.length > 12) D.nwHistory.shift();
@@ -2515,6 +2569,52 @@ function renderInv() {
   globalBody.innerHTML = global.length
     ? global.map(makeRowHTML).join('')
     : '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🌐</div>No global investments</div></td></tr>';
+
+  // Portfolio value history chart
+  const hist = (D.nwHistory || []).filter(h => h.inv !== undefined);
+  const chartCanvas = document.getElementById('inv-chart-canvas');
+  const chartEmpty = document.getElementById('inv-chart-empty');
+  if (chartCanvas) {
+    if (hist.length < 2) {
+      if (chartEmpty) chartEmpty.style.display = '';
+      if (invChartInstance) { invChartInstance.destroy(); invChartInstance = null; }
+    } else {
+      if (chartEmpty) chartEmpty.style.display = 'none';
+      if (invChartInstance) invChartInstance.destroy();
+      const isDark = document.body.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const textMuted = isDark ? 'rgba(200,190,175,0.5)' : 'rgba(100,90,80,0.5)';
+      invChartInstance = new Chart(chartCanvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: hist.map(h => h.m),
+          datasets: [{
+            data: hist.map(h => h.inv || 0),
+            borderColor: 'rgba(181,129,58,0.9)',
+            backgroundColor: 'rgba(181,129,58,0.12)',
+            fill: true, tension: 0.35, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: {
+            callbacks: { label: ctx => ' ' + fmt(ctx.parsed.y) }
+          }},
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 9 }, color: textMuted } },
+            y: { grid: { color: 'rgba(138,130,121,0.12)' }, ticks: { font: { size: 9 }, color: textMuted,
+              callback: v => v >= 1e7 ? '₹'+(v/1e7).toFixed(1)+'Cr' : v >= 1e5 ? '₹'+(v/1e5).toFixed(0)+'L' : '₹'+v.toLocaleString('en-IN')
+            }}
+          }
+        }
+      });
+    }
+  }
+
+  // India/Global value labels below split bar
+  const indiaValLbl = document.getElementById('inv-india-val-label');
+  const globalValLbl = document.getElementById('inv-global-val-label');
+  if (indiaValLbl) indiaValLbl.textContent = fmt(inVal);
+  if (globalValLbl) globalValLbl.textContent = fmt(glValINR);
 }
 
 // ─────────────────────────────────────────────
@@ -2565,6 +2665,49 @@ function renderEPF() {
   const taxFreePct = Math.min(100, Math.round((effective / 2000000) * 100));
   document.getElementById('grat-taxfree-bar').style.width = taxFreePct + '%';
   document.getElementById('grat-taxfree-pct').textContent = taxFreePct + '%';
+
+  // Retirement Projection
+  const projEl = document.getElementById('epf-projection-body');
+  if (projEl) {
+    const birthYear = e.birthYear || 0;
+    const retireAge = e.retireAge || 60;
+    if (!birthYear) {
+      projEl.innerHTML = '<div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Add your birth year via Update to see EPF corpus projection at retirement.</span></div>';
+    } else {
+      const currentAge = new Date().getFullYear() - birthYear;
+      const yearsLeft   = Math.max(0, retireAge - currentAge);
+      const n = yearsLeft * 12;
+      const r = 0.0825 / 12;
+      const P = e.balance || 0;
+      const C = e.monthly || 0;
+      const fvBal    = P * Math.pow(1 + r, n);
+      const fvContrib = n > 0 ? C * (Math.pow(1 + r, n) - 1) / r : 0;
+      const corpus   = Math.round(fvBal + fvContrib);
+      const corpusStr = corpus >= 1e7 ? cr(corpus) : lk(corpus);
+      projEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
+          <div>
+            <div class="card-label">Current Age</div>
+            <div class="card-value gold" style="font-size:17px">${currentAge} yrs</div>
+          </div>
+          <div>
+            <div class="card-label">Years to Retire</div>
+            <div class="card-value teal" style="font-size:17px">${yearsLeft} yrs</div>
+            <div style="font-size:10px;color:var(--muted)">Age ${retireAge} target</div>
+          </div>
+          <div>
+            <div class="card-label">Monthly Contribution</div>
+            <div class="card-value" style="font-size:17px">${fmt(C)}</div>
+          </div>
+          <div>
+            <div class="card-label">Projected Corpus</div>
+            <div class="card-value positive" style="font-size:17px">${yearsLeft > 0 ? corpusStr : fmt(P)}</div>
+            <div style="font-size:10px;color:var(--muted)">@ 8.25% p.a. EPF rate</div>
+          </div>
+        </div>
+        <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Projection assumes current balance of ${fmt(P)} + ${fmt(C)}/mo contributions compounding at 8.25% p.a. Does not account for future salary increments.</span></div>`;
+    }
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -2948,6 +3091,15 @@ function renderLoans() {
             <div class="progress-bar"><div class="progress-fill" style="width:${paidPct}%;background:var(--green)"></div></div>
           </div>
         </div>
+        <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
+          <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Prepayment Simulator</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="prepay-extra-${l.id}" placeholder="Extra ₹/month"
+              style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:12px;font-family:'DM Mono',monospace"
+              oninput="runPrepay(${l.id})">
+          </div>
+          <div id="prepay-result-${l.id}" style="font-size:11px;color:var(--muted);margin-top:6px;min-height:16px"></div>
+        </div>
         <div class="prop-actions" style="margin-top:10px">
           <button class="btn btn-sm" onclick="openEditLoan(${l.id})">Edit</button>
           <button class="btn btn-danger btn-sm" onclick="deleteLoan(${l.id})">Delete</button>
@@ -2974,6 +3126,41 @@ function renderLoans() {
   document.getElementById('loan-24b-val').textContent = fmt(capped);
   document.getElementById('loan-24b-pct').textContent = pf(homeLoanInt,200000) + '%';
   document.getElementById('loan-24b-bar').style.width = pf(homeLoanInt,200000) + '%';
+}
+
+function runPrepay(id) {
+  const l = D.loans.find(x => x.id === id);
+  const el = document.getElementById(`prepay-result-${id}`);
+  if (!el) return;
+  const extra = +document.getElementById(`prepay-extra-${id}`).value || 0;
+  if (!extra) { el.textContent = ''; return; }
+  if (!l.outstanding || !l.rate || !l.tenure) {
+    el.textContent = 'Enter outstanding balance, rate and tenure to simulate.';
+    return;
+  }
+  const r = l.rate / 100 / 12;
+  const P = l.outstanding;
+  const emi = l.emi > 0 ? l.emi : Math.round(P * r * Math.pow(1+r, l.tenure) / (Math.pow(1+r, l.tenure) - 1));
+  const stdInterest = (emi * l.tenure) - P;
+  // Simulate month-by-month with extra payment
+  let bal = P, months = 0;
+  while (bal > 0.01 && months < l.tenure * 3) {
+    const interest = bal * r;
+    const principal = Math.min(bal, emi + extra - interest);
+    if (principal <= 0) break;
+    bal -= principal;
+    months++;
+  }
+  const newInterest = Math.max(0, ((emi + extra) * months) - P);
+  const monthsSaved = l.tenure - months;
+  const interestSaved = Math.round(stdInterest - newInterest);
+  if (monthsSaved <= 0) {
+    el.innerHTML = `<span style="color:var(--muted)">Loan closes in ${months} months — try a higher extra amount.</span>`;
+  } else {
+    el.innerHTML = `Close in <span style="font-weight:600;color:var(--text)">${months} months</span> `
+      + `<span style="color:var(--muted)">(saves ${monthsSaved} month${monthsSaved>1?'s':''})</span> · `
+      + `Interest saved: <span style="font-weight:600;color:var(--green)">${fmt(interestSaved)}</span>`;
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -3399,6 +3586,57 @@ function renderTax() {
           }
         }
       });
+    }
+  }
+
+  // Capital Gains from Investments
+  const equityTypes = new Set(['Mutual Fund', 'Stock', 'ESOP', 'RSU']);
+  const now = new Date();
+  let ltcgGain = 0, stcgGain = 0, debtGain = 0, noDatesCount = 0;
+  D.investments.forEach(inv => {
+    const pnl = (inv.value || 0) - (inv.cost || 0);
+    if (pnl <= 0) return;
+    const dateStr = isEsopType(inv.type) ? inv.grantDate : inv.purchaseDate;
+    if (!dateStr) { noDatesCount++; return; }
+    const purchDate = new Date(dateStr);
+    const monthsHeld = (now.getFullYear() - purchDate.getFullYear()) * 12 + (now.getMonth() - purchDate.getMonth());
+    if (equityTypes.has(inv.type)) {
+      if (monthsHeld > 12) ltcgGain += pnl;
+      else stcgGain += pnl;
+    } else {
+      debtGain += pnl;
+    }
+  });
+  const ltcgExempt = 125000;
+  const ltcgTax  = Math.max(0, (ltcgGain - ltcgExempt) * 0.125);
+  const stcgTax  = stcgGain * 0.20;
+  const cgTotal  = ltcgTax + stcgTax;
+  const cgEl = document.getElementById('tax-capgains-body');
+  if (cgEl) {
+    if (ltcgGain === 0 && stcgGain === 0 && debtGain === 0) {
+      cgEl.innerHTML = `<div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Add purchase dates to investments to see LTCG/STCG estimates.${noDatesCount > 0 ? ` ${noDatesCount} investment(s) with gains have no purchase date.` : ''}</span></div>`;
+    } else {
+      cgEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <div class="card-label">LTCG — Equity (&gt;12 mo)</div>
+            <div class="card-value gold" style="font-size:17px">${fmt(ltcgGain)}</div>
+            <div style="font-size:10px;color:var(--muted)">Exempt ₹1.25L → Tax: ${fmt(Math.round(ltcgTax))}</div>
+          </div>
+          <div>
+            <div class="card-label">STCG — Equity (≤12 mo)</div>
+            <div class="card-value orange" style="font-size:17px">${fmt(stcgGain)}</div>
+            <div style="font-size:10px;color:var(--muted)">Tax @ 20%: ${fmt(Math.round(stcgTax))}</div>
+          </div>
+          <div>
+            <div class="card-label">Est. Capital Gains Tax</div>
+            <div class="card-value negative" style="font-size:17px">${fmt(Math.round(cgTotal))}</div>
+            <div style="font-size:10px;color:var(--muted)">LTCG 12.5% + STCG 20%</div>
+          </div>
+        </div>
+        ${debtGain > 0 ? `<div class="alert alert-warn" style="margin-bottom:8px"><span>⚡</span><span>Non-equity gains of ${fmt(debtGain)} (Debt / FD / Other) are taxed at your income slab rate — not included above.</span></div>` : ''}
+        ${noDatesCount > 0 ? `<div class="alert alert-warn" style="margin-bottom:8px"><span>⚡</span><span>${noDatesCount} investment(s) with unrealised gains have no purchase date — add dates for full accuracy.</span></div>` : ''}
+        <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Equity LTCG (held &gt;12 months): 12.5% above ₹1.25L exemption. Equity STCG (≤12 months): 20%. Per Finance Act 2024.</span></div>`;
     }
   }
 }
