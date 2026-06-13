@@ -1178,7 +1178,7 @@ function calcVestedUnits(inv) {
 const CURRENCY_SYMBOLS = {INR:'₹',USD:'$',EUR:'€',GBP:'£',SGD:'S$',AED:'AED ',JPY:'¥',AUD:'A$',CAD:'C$'};
 function getCurrSymbol(c) { return CURRENCY_SYMBOLS[c] || '₹'; }
 
-let invDisplayCurrency = 'INR';
+let invDisplayCurrency = 'USD';
 
 function getPortfolioCurrencies() {
   const seen = new Set(['INR']);
@@ -2381,60 +2381,83 @@ function renderInv() {
     }
   });
 
-  const list = filterByMember(D.investments);
-  const cost = list.reduce((s,i)=>s+i.cost,0);
-  const val  = list.reduce((s,i)=>s+i.value,0);
-  const pnl  = val - cost;
+  const list   = filterByMember(D.investments);
+  const india  = list.filter(i => !i.currency || i.currency === 'INR');
+  const global = list.filter(i => i.currency && i.currency !== 'INR');
 
-  // Populate the "View in" selector with currencies actually present in the portfolio
-  const portfolioCurrencies = getPortfolioCurrencies();
+  const inCost    = india.reduce((s,i)=>s+i.cost,0);
+  const inVal     = india.reduce((s,i)=>s+i.value,0);
+  const inPnl     = inVal - inCost;
+  const glCostINR = global.reduce((s,i)=>s+i.cost,0);
+  const glValINR  = global.reduce((s,i)=>s+i.value,0);
+  const totalVal  = inVal + glValINR;
+
+  // India / Global split bar
+  const indiaPct  = totalVal > 0 ? Math.round(inVal / totalVal * 100) : 0;
+  const globalPct = 100 - indiaPct;
+  const indiaBar = document.getElementById('inv-india-pct-bar');
+  const globalBar = document.getElementById('inv-global-pct-bar');
+  if (indiaBar)  indiaBar.style.width  = indiaPct + '%';
+  if (globalBar) globalBar.style.width = globalPct + '%';
+  const inLabel = document.getElementById('inv-india-pct-label');
+  const glLabel = document.getElementById('inv-global-pct-label');
+  if (inLabel) inLabel.textContent = totalVal > 0 ? `🇮🇳 ${indiaPct}%` : '🇮🇳 —';
+  if (glLabel) glLabel.textContent = totalVal > 0 ? `🌐 ${globalPct}%` : '🌐 —';
+
+  // Indian compact stats
+  document.getElementById('inv-in-cost').textContent = fmt(inCost);
+  document.getElementById('inv-in-val').textContent  = fmt(inVal);
+  const inPnlEl = document.getElementById('inv-in-pnl');
+  inPnlEl.textContent    = (inPnl >= 0 ? '+' : '−') + fmt(Math.abs(inPnl));
+  inPnlEl.style.color    = inPnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Global "View in" selector — non-INR currencies present + INR option
+  const globalCurrencies = ['INR', ...new Set(global.map(i => i.currency).filter(Boolean))];
   const currSelect = document.getElementById('inv-display-currency');
   if (currSelect) {
-    if (!portfolioCurrencies.includes(invDisplayCurrency)) invDisplayCurrency = 'INR';
-    currSelect.innerHTML = portfolioCurrencies.map(c =>
+    if (!globalCurrencies.includes(invDisplayCurrency))
+      invDisplayCurrency = globalCurrencies.includes('USD') ? 'USD' : globalCurrencies[0];
+    currSelect.innerHTML = globalCurrencies.map(c =>
       `<option value="${c}" ${c === invDisplayCurrency ? 'selected' : ''}>${getCurrSymbol(c)} ${c}</option>`
     ).join('');
   }
 
-  // Convert INR totals to the chosen display currency
+  // Global compact stats (converted to display currency)
   const displayRate = getInvDisplayRate(invDisplayCurrency);
   const displaySym  = getCurrSymbol(invDisplayCurrency);
   const isINR       = invDisplayCurrency === 'INR';
-  const dCost = isINR ? cost : Math.round(cost / displayRate);
-  const dVal  = isINR ? val  : Math.round(val  / displayRate);
-  const dPnl  = isINR ? pnl  : Math.round(pnl  / displayRate);
-  const fmtD  = n => numbersHidden ? `${displaySym} ••••` : displaySym + Math.abs(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+  const fmtD = n => numbersHidden ? `${displaySym}••••` : displaySym + Math.abs(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+  const dGlCost = isINR ? glCostINR : Math.round(glCostINR / displayRate);
+  const dGlVal  = isINR ? glValINR  : Math.round(glValINR  / displayRate);
+  const dGlPnl  = dGlVal - dGlCost;
 
-  document.getElementById('inv-cost').textContent = fmtD(dCost);
-  document.getElementById('inv-val').textContent  = fmtD(dVal);
-  [
-    ['inv-cost-card-label', isINR ? 'Total Invested' : `Total Invested (${invDisplayCurrency})`],
-    ['inv-val-card-label',  isINR ? 'Current Value'  : `Current Value (${invDisplayCurrency})`],
-    ['inv-pnl-card-label',  isINR ? 'Unrealised P&L' : `Unrealised P&L (${invDisplayCurrency})`],
-  ].forEach(([id, text]) => { const e = document.getElementById(id); if (e) e.textContent = text; });
-  const el = document.getElementById('inv-pnl');
-  el.textContent = (dPnl>=0?'+':'−') + fmtD(Math.abs(dPnl));
-  el.className = 'card-value ' + (dPnl >= 0 ? 'positive' : 'negative');
-  const tbody = document.getElementById('inv-rows');
-  if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">↗</div>No investments</div></td></tr>';
-    return;
-  }
-  tbody.innerHTML = list.map(inv => {
+  const glCostLbl = document.getElementById('inv-gl-cost-label');
+  const glValLbl  = document.getElementById('inv-gl-val-label');
+  const glPnlLbl  = document.getElementById('inv-gl-pnl-label');
+  if (glCostLbl) glCostLbl.textContent = isINR ? 'Invested (INR)' : `Invested (${invDisplayCurrency})`;
+  if (glValLbl)  glValLbl.textContent  = isINR ? 'Value (INR)'    : `Value (${invDisplayCurrency})`;
+  if (glPnlLbl)  glPnlLbl.textContent  = isINR ? 'P&L (INR)'      : `P&L (${invDisplayCurrency})`;
+
+  document.getElementById('inv-gl-cost').textContent = fmtD(dGlCost);
+  document.getElementById('inv-gl-val').textContent  = fmtD(dGlVal);
+  const glPnlEl = document.getElementById('inv-gl-pnl');
+  glPnlEl.textContent  = (dGlPnl >= 0 ? '+' : '−') + fmtD(Math.abs(dGlPnl));
+  glPnlEl.style.color  = dGlPnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Shared row renderer for both panels
+  function makeRowHTML(inv) {
     const isNonINR = inv.currency && inv.currency !== 'INR';
-    const sym = getCurrSymbol(inv.currency);
+    const sym  = getCurrSymbol(inv.currency);
     const rate = inv.exchangeRate || 1;
-
     if (isEsopType(inv.type)) {
-      const vested = calcVestedUnits(inv);
-      const total = inv.totalUnits || 0;
+      const vested   = calcVestedUnits(inv);
+      const total    = inv.totalUnits || 0;
       const unvested = total - vested;
-      const vestPct = total ? Math.round(vested / total * 100) : 0;
-      const vestedVal = Math.round(vested * (inv.currentPrice || 0) * rate);
-      const totalPotential = Math.round(total * (inv.currentPrice || 0) * rate);
+      const vestPct  = total ? Math.round(vested / total * 100) : 0;
+      const vestedVal      = Math.round(vested * (inv.currentPrice || 0) * rate);
+      const totalPotential = Math.round(total  * (inv.currentPrice || 0) * rate);
       const priceGain = inv.grantPrice && inv.currentPrice
-        ? (((inv.currentPrice - inv.grantPrice) / inv.grantPrice) * 100).toFixed(1)
-        : null;
+        ? (((inv.currentPrice - inv.grantPrice) / inv.grantPrice) * 100).toFixed(1) : null;
       const priceDisplay = isNonINR
         ? `${sym}${(inv.currentPrice||0).toLocaleString('en-IN')}/unit`
         : `${fmt(inv.currentPrice||0)}/unit`;
@@ -2451,14 +2474,8 @@ function renderInv() {
         </td>
         <td><span class="badge badge-teal" style="font-size:9px;padding:2px 6px">${inv.type}</span>${isNonINR ? `<div style="font-size:9px;color:var(--muted);margin-top:2px">${inv.currency}</div>` : ''}</td>
         <td>${memberTag(inv.member)}</td>
-        <td style="font-family:'DM Mono',monospace;font-size:12px">
-          ${grantDisplay}
-          <div style="font-size:10px;color:var(--muted)">${total.toLocaleString('en-IN')} granted</div>
-        </td>
-        <td style="font-family:'DM Mono',monospace;font-size:12px">
-          ${fmt(vestedVal)}
-          ${unvested > 0 ? `<div style="font-size:10px;color:var(--muted)">+${fmt(totalPotential - vestedVal)} unvested</div>` : ''}
-        </td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px">${grantDisplay}<div style="font-size:10px;color:var(--muted)">${total.toLocaleString('en-IN')} granted</div></td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(vestedVal)}${unvested > 0 ? `<div style="font-size:10px;color:var(--muted)">+${fmt(totalPotential - vestedVal)} unvested</div>` : ''}</td>
         <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;color:${vestPct>=100?'var(--green)':'var(--accent)'}">${vestPct}% vested
           ${priceGain !== null ? `<div style="font-size:10px;color:${priceGain>=0?'var(--green)':'var(--red)'}">${priceGain>=0?'+':''}${priceGain}% price</div>` : ''}
           <div style="margin-top:2px">
@@ -2474,7 +2491,7 @@ function renderInv() {
     return `<tr>
       <td>
         <div style="font-size:12px;font-weight:500">${esc(inv.name)}</div>
-        ${isNonINR ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${inv.currency} @ ₹${rate}/unit</div>` : ''}
+        ${isNonINR ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${inv.currency} @ ₹${(rate).toLocaleString('en-IN')}</div>` : ''}
       </td>
       <td><span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">${inv.type}</span></td>
       <td>${memberTag(inv.member)}</td>
@@ -2485,7 +2502,19 @@ function renderInv() {
         <button onclick="deleteInv(${inv.id})" style="margin-left:4px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">✕</button>
       </td>
     </tr>`;
-  }).join('');
+  }
+
+  // Render Indian table
+  const indiaBody = document.getElementById('inv-rows-india');
+  indiaBody.innerHTML = india.length
+    ? india.map(makeRowHTML).join('')
+    : '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">↗</div>No Indian investments</div></td></tr>';
+
+  // Render Global table
+  const globalBody = document.getElementById('inv-rows-global');
+  globalBody.innerHTML = global.length
+    ? global.map(makeRowHTML).join('')
+    : '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🌐</div>No global investments</div></td></tr>';
 }
 
 // ─────────────────────────────────────────────

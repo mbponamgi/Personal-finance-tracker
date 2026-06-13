@@ -890,27 +890,87 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
 
     <!-- ══════════ INVESTMENTS ══════════ -->
     <div class="view" id="view-investments">
-      <div class="summary-grid g3">
-        <div class="summary-card card-gold"><div class="card-label" id="inv-cost-card-label">Total Invested</div><div class="card-value gold" id="inv-cost">₹0</div></div>
-        <div class="summary-card card-green"><div class="card-label" id="inv-val-card-label">Current Value</div><div class="card-value positive" id="inv-val">₹0</div></div>
-        <div class="summary-card card-teal"><div class="card-label" id="inv-pnl-card-label">Unrealised P&amp;L</div><div class="card-value teal" id="inv-pnl">₹0</div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">Portfolio</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <label style="font-size:11px;color:var(--muted);white-space:nowrap">View in</label>
-            <select id="inv-display-currency" onchange="setInvDisplayCurrency(this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);cursor:pointer;height:26px">
-              <option value="INR">₹ INR</option>
-            </select>
-            <button class="panel-action" onclick="openAddInv()">+ Add</button>
+      <!-- Overall Portfolio Split Bar -->
+      <div class="summary-card" style="margin-bottom:20px">
+        <div class="card-label">India · Global Split</div>
+        <div style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px">
+            <span id="inv-india-pct-label">🇮🇳 —</span>
+            <span id="inv-global-pct-label">🌐 —</span>
+          </div>
+          <div style="background:var(--surface2);border-radius:4px;height:8px;overflow:hidden;display:flex">
+            <div id="inv-india-pct-bar" style="height:100%;background:var(--accent);border-radius:4px 0 0 4px;transition:width .4s;width:0%"></div>
+            <div id="inv-global-pct-bar" style="height:100%;background:var(--accent2);border-radius:0 4px 4px 0;transition:width .4s;width:0%"></div>
           </div>
         </div>
-        <div class="panel-body">
-          <table class="data-table">
-            <thead><tr><th>Name</th><th>Type</th><th>Member</th><th>Invested</th><th>Current Value</th><th>Returns</th></tr></thead>
-            <tbody id="inv-rows"><tr><td colspan="6"><div class="empty-state"><div class="empty-icon">↗</div>No investments</div></td></tr></tbody>
-          </table>
+      </div>
+
+      <!-- Two-col: Indian + Global Portfolios -->
+      <div class="two-col" style="margin-bottom:0">
+        <!-- Indian Portfolio -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">🇮🇳 Indian Portfolio</span>
+            <button class="panel-action" onclick="openAddInv()">+ Add</button>
+          </div>
+          <div style="display:flex;gap:0;border-bottom:1px solid var(--border)">
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)">Invested</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent);font-family:'DM Mono',monospace" id="inv-in-cost">₹0</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)">Value</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent2);font-family:'DM Mono',monospace" id="inv-in-val">₹0</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)">P&amp;L</div>
+              <div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace" id="inv-in-pnl">₹0</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <table class="data-table">
+              <thead><tr><th>Name</th><th>Type</th><th>Member</th><th>Invested</th><th>Value</th><th>Returns</th></tr></thead>
+              <tbody id="inv-rows-india"><tr><td colspan="6"><div class="empty-state"><div class="empty-icon">↗</div>No Indian investments</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Global Portfolio -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">🌐 Global Portfolio</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <label style="font-size:11px;color:var(--muted);white-space:nowrap">View in</label>
+              <select id="inv-display-currency" onchange="setInvDisplayCurrency(this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);cursor:pointer;height:26px">
+                <option value="INR">₹ INR</option>
+              </select>
+              <button class="panel-action" onclick="openAddInv()">+ Add</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:0;border-bottom:1px solid var(--border)">
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)" id="inv-gl-cost-label">Invested (INR)</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent);font-family:'DM Mono',monospace" id="inv-gl-cost">₹0</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)" id="inv-gl-val-label">Value (INR)</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent2);font-family:'DM Mono',monospace" id="inv-gl-val">₹0</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)" id="inv-gl-pnl-label">P&amp;L (INR)</div>
+              <div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace" id="inv-gl-pnl">₹0</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <table class="data-table">
+              <thead><tr><th>Name</th><th>Type</th><th>Member</th><th>Invested</th><th>Value</th><th>Returns</th></tr></thead>
+              <tbody id="inv-rows-global"><tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🌐</div>No global investments</div></td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
