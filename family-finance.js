@@ -31,7 +31,7 @@ let D = {
   epf:  {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null, birthYear:0, retireAge:60},
   gratuity: {employer:'', joiningDate:'', basicDA:0, actualAccrued:0},
   nps:  {},
-  tax:  {gross:0, s80c:0, s80ccd:0, s24b:0, s80d:0, hra:0},
+  tax:  {},
   transactions: [],
   budgets: {
     'Food & Dining':0, 'Travel':0, 'Shopping':0, 'Utilities':0,
@@ -49,6 +49,10 @@ function load() {
       D = deepMerge(D, parsed);
       if (D.nps && D.nps.tier1 !== undefined) {
         D.nps = { 'madhu': Object.assign({}, D.nps) };
+      }
+      // Migrate flat D.tax to per-member structure
+      if (D.tax && 'gross' in D.tax) {
+        D.tax = { madhu: Object.assign({}, D.tax) };
       }
     }
   } catch(e) {}
@@ -1122,8 +1126,30 @@ function saveNPS() {
   snapshotNW(); save(); renderAll(); closeModal('npsModal');
 }
 
+function getTaxMember() {
+  return currentMember === 'all' ? 'madhu' : currentMember;
+}
+
+function currentTax() {
+  const m = getTaxMember();
+  return D.tax[m] || {gross:0, s80c:0, s80ccd:0, s24b:0, s80d:0, hra:0};
+}
+
+function openTaxModal() {
+  const t = currentTax();
+  document.getElementById('m-tax-gross').value = t.gross || '';
+  document.getElementById('m-tax-80c').value   = t.s80c   || '';
+  document.getElementById('m-tax-nps').value   = t.s80ccd || '';
+  document.getElementById('m-tax-hl').value    = t.s24b   || '';
+  document.getElementById('m-tax-80d').value   = t.s80d   || '';
+  document.getElementById('m-tax-hra').value   = t.hra    || '';
+  openModal('taxModal');
+}
+
 function saveTax() {
-  D.tax = {
+  const m = getTaxMember();
+  if (!D.tax) D.tax = {};
+  D.tax[m] = {
     gross: +document.getElementById('m-tax-gross').value || 0,
     s80c: Math.min(+document.getElementById('m-tax-80c').value || 0, 150000),
     s80ccd: Math.min(+document.getElementById('m-tax-nps').value || 0, 50000),
@@ -1530,7 +1556,8 @@ function renderOv() {
   const totalLiab = loanLiab + cardLiab;
   const npsData = getNpsData();
   const npsTotal = npsData.tier1 + npsData.tier2;
-  const nw = liq + propVal + inv + goldVal + D.epf.balance + npsTotal + getGratuityValue() - totalLiab;
+  const epfGratuity = currentMember === 'all' ? D.epf.balance + getGratuityValue() : 0;
+  const nw = liq + propVal + inv + goldVal + epfGratuity + npsTotal - totalLiab;
 
   document.getElementById('ov-nw').textContent = fmt(nw);
   document.getElementById('ov-liquid').textContent = fmt(liq);
@@ -1611,7 +1638,7 @@ function renderTxnIntel() {
   
   // Create a unified list of EMIs
   const unifiedEmis = [];
-  D.loans.forEach(l => {
+  filterByMember(D.loans).forEach(l => {
     // find latest payment for this exact loan (match by amount AND name)
     const latestTxn = txns.filter(t => {
       const tAmt = Number(t.amount);
@@ -2023,7 +2050,7 @@ function renderAlerts() {
   const alerts = [];
   const cardOut = filterByMember(D.cards).reduce((s,c)=>s+c.outstanding,0);
   if (cardOut > 0) alerts.push({type:'warn', msg:`Card outstanding of ${fmt(cardOut)} — clear before interest kicks in.`});
-  const t = D.tax;
+  const t = currentTax();
   if (t.gross > 0 && t.s80c < 150000) alerts.push({type:'info', msg:`Section 80C: ${fmt(150000-t.s80c)} headroom remaining.`});
   const npsData = getNpsData();
   if (npsData.fyContrib < 50000 && t.gross > 0) alerts.push({type:'info', msg:`NPS 80CCD(1B): ${fmt(50000-npsData.fyContrib)} unused — worth ${fmt((50000-npsData.fyContrib)*.312)} in tax savings.`});
@@ -3456,7 +3483,7 @@ function renderBudget() {
 // TAX
 // ─────────────────────────────────────────────
 function renderTax() {
-  const t = D.tax;
+  const t = currentTax();
   const totalDed = t.s80c + t.s80ccd + t.s24b + t.s80d + t.hra + 75000;
   const taxable = Math.max(0, t.gross - totalDed);
   const ot = oldTax(taxable), nt = newTax(t.gross);
@@ -3788,7 +3815,7 @@ function renderWidgets() {
   const harvestRoom = Math.max(0,100000-Math.max(0,investGains));
   const npsDataW = getNpsData();
   const npsRoom = Math.max(0,50000-(npsDataW.fyContrib||0));
-  const s80cLeft = Math.max(0,150000-(D.tax.s80c||0));
+  const s80cLeft = Math.max(0,150000-(currentTax().s80c||0));
   document.getElementById('w-tax-harvest').innerHTML = `
     <div class="widget-label">&#x1F9E0; Tax-Harvest Intel</div>
     <div class="widget-value" style="color:var(--accent3)">${fmt(harvestRoom)}</div>
