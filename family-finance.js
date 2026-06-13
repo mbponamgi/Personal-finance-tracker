@@ -374,6 +374,8 @@ function openAddInv() {
   document.getElementById('m-inv-id').value = '';
   document.getElementById('m-inv-name').value = '';
   document.getElementById('m-inv-type').value = 'Mutual Fund';
+  document.getElementById('m-inv-currency').value = 'INR';
+  document.getElementById('m-inv-fx-rate').value = '';
   document.getElementById('m-inv-cost').value = '';
   document.getElementById('m-inv-val').value = '';
   toggleEsopFields();
@@ -388,8 +390,8 @@ function openEditInv(id) {
   document.getElementById('m-inv-name').value = inv.name;
   document.getElementById('m-inv-type').value = inv.type;
   document.getElementById('m-inv-member').value = inv.member;
-  document.getElementById('m-inv-cost').value = inv.cost || 0;
-  document.getElementById('m-inv-val').value = inv.value || 0;
+  document.getElementById('m-inv-currency').value = inv.currency || 'INR';
+  document.getElementById('m-inv-fx-rate').value = (inv.exchangeRate && inv.exchangeRate !== 1) ? inv.exchangeRate : '';
   if (isEsopType(inv.type)) {
     document.getElementById('m-inv-grant-date').value = inv.grantDate || '';
     document.getElementById('m-inv-units').value = inv.totalUnits || '';
@@ -398,6 +400,10 @@ function openEditInv(id) {
     document.getElementById('m-inv-vest-months').value = inv.vestingMonths || 48;
     document.getElementById('m-inv-cliff').value = inv.cliffMonths || 12;
     document.getElementById('m-inv-vest-freq').value = inv.vestingFrequency || 'quarterly';
+  } else {
+    // Restore the original foreign-currency amounts the user entered, not the converted INR
+    document.getElementById('m-inv-cost').value = inv.costFX !== undefined ? inv.costFX : (inv.cost || 0);
+    document.getElementById('m-inv-val').value = inv.valueFX !== undefined ? inv.valueFX : (inv.value || 0);
   }
   toggleEsopFields();
   openModal('invModal');
@@ -701,11 +707,15 @@ function deleteGold(id) {
 function saveInv() {
   const idVal = document.getElementById('m-inv-id').value;
   const type = document.getElementById('m-inv-type').value;
+  const currency = document.getElementById('m-inv-currency').value || 'INR';
+  const fxRate = (currency !== 'INR') ? (+document.getElementById('m-inv-fx-rate').value || 1) : 1;
   const inv = {
     id: idVal ? +idVal : Date.now(),
     name: document.getElementById('m-inv-name').value,
     type,
     member: document.getElementById('m-inv-member').value,
+    currency,
+    exchangeRate: fxRate,
   };
   if (!inv.name) return;
   if (isEsopType(type)) {
@@ -716,11 +726,15 @@ function saveInv() {
     inv.vestingMonths = +document.getElementById('m-inv-vest-months').value || 48;
     inv.cliffMonths = +document.getElementById('m-inv-cliff').value || 12;
     inv.vestingFrequency = document.getElementById('m-inv-vest-freq').value;
-    inv.cost = Math.round(inv.grantPrice * inv.totalUnits);
-    inv.value = Math.round(calcVestedUnits(inv) * inv.currentPrice);
+    inv.cost = Math.round(inv.grantPrice * inv.totalUnits * fxRate);
+    inv.value = Math.round(calcVestedUnits(inv) * inv.currentPrice * fxRate);
   } else {
-    inv.cost = +document.getElementById('m-inv-cost').value || 0;
-    inv.value = +document.getElementById('m-inv-val').value || 0;
+    const costFX = +document.getElementById('m-inv-cost').value || 0;
+    const valueFX = +document.getElementById('m-inv-val').value || 0;
+    inv.costFX = costFX;
+    inv.valueFX = valueFX;
+    inv.cost = Math.round(costFX * fxRate);
+    inv.value = Math.round(valueFX * fxRate);
   }
   upsert(D.investments, inv);
   snapshotNW(); save(); renderAll(); closeModal('invModal');
@@ -1161,8 +1175,23 @@ function calcVestedUnits(inv) {
   return Math.floor((completedCycles / totalCycles) * inv.totalUnits);
 }
 
+const CURRENCY_SYMBOLS = {INR:'₹',USD:'$',EUR:'€',GBP:'£',SGD:'S$',AED:'AED ',JPY:'¥',AUD:'A$',CAD:'C$'};
+function getCurrSymbol(c) { return CURRENCY_SYMBOLS[c] || '₹'; }
+
 function isEsopType(type) {
   return type === 'ESOP' || type === 'RSU';
+}
+
+function toggleCurrencyFields() {
+  const currency = document.getElementById('m-inv-currency').value || 'INR';
+  const isNonINR = currency !== 'INR';
+  const sym = getCurrSymbol(currency);
+  document.getElementById('inv-fx-rate-group').style.display = isNonINR ? '' : 'none';
+  // Update labels so user knows which currency they're entering amounts in
+  document.getElementById('inv-cost-label').textContent = `Invested (${sym})`;
+  document.getElementById('inv-val-label').textContent = `Current Value (${sym})`;
+  document.getElementById('inv-grant-price-label').textContent = `Grant / Strike Price (${sym}/unit)`;
+  document.getElementById('inv-cur-price-label').textContent = `Current Price (${sym}/unit)`;
 }
 
 function toggleEsopFields() {
@@ -1171,6 +1200,7 @@ function toggleEsopFields() {
   document.getElementById('esop-fields').style.display = esop ? '' : 'none';
   document.getElementById('inv-cost-group').style.display = esop ? 'none' : '';
   document.getElementById('inv-val-group').style.display = esop ? 'none' : '';
+  toggleCurrencyFields();
 }
 
 // ─────────────────────────────────────────────
@@ -2316,11 +2346,16 @@ function renderGold() {
 // INVESTMENTS
 // ─────────────────────────────────────────────
 function renderInv() {
-  // Recompute ESOP/RSU cost+value from live vesting so NW stays accurate
+  // Recompute cost+value in INR for ESOP/RSU (vesting changes over time)
+  // and for any non-INR regular investments (keeps FX conversion consistent)
   D.investments.forEach(inv => {
+    const rate = inv.exchangeRate || 1;
     if (isEsopType(inv.type)) {
-      inv.cost = Math.round((inv.grantPrice || 0) * (inv.totalUnits || 0));
-      inv.value = Math.round(calcVestedUnits(inv) * (inv.currentPrice || 0));
+      inv.cost = Math.round((inv.grantPrice || 0) * (inv.totalUnits || 0) * rate);
+      inv.value = Math.round(calcVestedUnits(inv) * (inv.currentPrice || 0) * rate);
+    } else if (inv.currency && inv.currency !== 'INR' && inv.valueFX !== undefined) {
+      inv.cost = Math.round((inv.costFX || 0) * rate);
+      inv.value = Math.round(inv.valueFX * rate);
     }
   });
 
@@ -2339,28 +2374,38 @@ function renderInv() {
     return;
   }
   tbody.innerHTML = list.map(inv => {
+    const isNonINR = inv.currency && inv.currency !== 'INR';
+    const sym = getCurrSymbol(inv.currency);
+    const rate = inv.exchangeRate || 1;
+
     if (isEsopType(inv.type)) {
       const vested = calcVestedUnits(inv);
       const total = inv.totalUnits || 0;
       const unvested = total - vested;
       const vestPct = total ? Math.round(vested / total * 100) : 0;
-      const vestedVal = Math.round(vested * (inv.currentPrice || 0));
-      const totalPotential = Math.round(total * (inv.currentPrice || 0));
+      const vestedVal = Math.round(vested * (inv.currentPrice || 0) * rate);
+      const totalPotential = Math.round(total * (inv.currentPrice || 0) * rate);
       const priceGain = inv.grantPrice && inv.currentPrice
         ? (((inv.currentPrice - inv.grantPrice) / inv.grantPrice) * 100).toFixed(1)
         : null;
+      const priceDisplay = isNonINR
+        ? `${sym}${(inv.currentPrice||0).toLocaleString('en-IN')}/unit`
+        : `${fmt(inv.currentPrice||0)}/unit`;
+      const grantDisplay = inv.grantPrice
+        ? (isNonINR ? `${sym}${inv.grantPrice.toLocaleString('en-IN')}/u` : fmt(inv.grantPrice)+'/u')
+        : 'Free';
       return `<tr>
         <td>
           <div style="font-size:12px;font-weight:500">${esc(inv.name)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">${vested.toLocaleString('en-IN')} / ${total.toLocaleString('en-IN')} units vested · ₹${(inv.currentPrice||0).toLocaleString('en-IN')}/unit</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${vested.toLocaleString('en-IN')} / ${total.toLocaleString('en-IN')} units vested · ${priceDisplay}</div>
           <div style="margin-top:5px;background:var(--surface2);border-radius:3px;height:4px;width:120px">
             <div style="width:${vestPct}%;height:100%;background:var(--accent);border-radius:3px;transition:width .3s"></div>
           </div>
         </td>
-        <td><span class="badge badge-teal" style="font-size:9px;padding:2px 6px">${inv.type}</span></td>
+        <td><span class="badge badge-teal" style="font-size:9px;padding:2px 6px">${inv.type}</span>${isNonINR ? `<div style="font-size:9px;color:var(--muted);margin-top:2px">${inv.currency}</div>` : ''}</td>
         <td>${memberTag(inv.member)}</td>
         <td style="font-family:'DM Mono',monospace;font-size:12px">
-          ${inv.grantPrice ? fmt(inv.grantPrice)+'/u' : 'Free'}
+          ${grantDisplay}
           <div style="font-size:10px;color:var(--muted)">${total.toLocaleString('en-IN')} granted</div>
         </td>
         <td style="font-family:'DM Mono',monospace;font-size:12px">
@@ -2377,12 +2422,17 @@ function renderInv() {
       </tr>`;
     }
     const r = inv.cost ? (((inv.value-inv.cost)/inv.cost)*100).toFixed(1) : 0;
+    const costDisplay = isNonINR && inv.costFX ? `${fmt(inv.cost)}<div style="font-size:10px;color:var(--muted)">${sym}${inv.costFX.toLocaleString('en-IN')}</div>` : fmt(inv.cost);
+    const valDisplay  = isNonINR && inv.valueFX ? `${fmt(inv.value)}<div style="font-size:10px;color:var(--muted)">${sym}${inv.valueFX.toLocaleString('en-IN')}</div>` : fmt(inv.value);
     return `<tr>
-      <td><div style="font-size:12px;font-weight:500">${esc(inv.name)}</div></td>
+      <td>
+        <div style="font-size:12px;font-weight:500">${esc(inv.name)}</div>
+        ${isNonINR ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${inv.currency} @ ₹${rate}/unit</div>` : ''}
+      </td>
       <td><span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">${inv.type}</span></td>
       <td>${memberTag(inv.member)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(inv.cost)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(inv.value)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${costDisplay}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${valDisplay}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;color:${r>=0?'var(--green)':'var(--red)'}">${r>=0?'+':''}${r}%
         <button onclick="openEditInv(${inv.id})" style="margin-left:8px;background:none;border:none;cursor:pointer;color:var(--accent);font-size:11px">✎</button>
         <button onclick="deleteInv(${inv.id})" style="margin-left:4px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">✕</button>

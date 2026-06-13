@@ -1468,16 +1468,34 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
           <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
         </select>
       </div>
-      <div class="form-group" id="inv-cost-group"><label class="form-label">Invested (₹)</label><input class="form-input" id="m-inv-cost" type="number" placeholder="0"></div>
-      <div class="form-group" id="inv-val-group"><label class="form-label">Current Value (₹)</label><input class="form-input" id="m-inv-val" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Currency</label>
+        <select class="form-select" id="m-inv-currency" onchange="toggleCurrencyFields()">
+          <option value="INR">₹ INR — Indian Rupee</option>
+          <option value="USD">$ USD — US Dollar</option>
+          <option value="EUR">€ EUR — Euro</option>
+          <option value="GBP">£ GBP — British Pound</option>
+          <option value="SGD">S$ SGD — Singapore Dollar</option>
+          <option value="AED">AED — UAE Dirham</option>
+          <option value="JPY">¥ JPY — Japanese Yen</option>
+          <option value="AUD">A$ AUD — Australian Dollar</option>
+          <option value="CAD">C$ CAD — Canadian Dollar</option>
+        </select>
+      </div>
+      <div class="form-group" id="inv-fx-rate-group" style="display:none">
+        <label class="form-label">Exchange Rate (1 unit = ₹)</label>
+        <input class="form-input" id="m-inv-fx-rate" type="number" step="0.01" placeholder="e.g. 85 for USD">
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">How many ₹ equals 1 unit of selected currency</div>
+      </div>
+      <div class="form-group" id="inv-cost-group"><label class="form-label" id="inv-cost-label">Invested (₹)</label><input class="form-input" id="m-inv-cost" type="number" placeholder="0"></div>
+      <div class="form-group" id="inv-val-group"><label class="form-label" id="inv-val-label">Current Value (₹)</label><input class="form-input" id="m-inv-val" type="number" placeholder="0"></div>
       <!-- ESOP / RSU fields — shown only when type is ESOP or RSU -->
       <div id="esop-fields" style="display:none;grid-column:1/-1">
         <div style="font-size:11px;color:var(--muted);margin:4px 0 10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border);padding-top:12px">Vesting Details</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
           <div class="form-group"><label class="form-label">Grant Date</label><input class="form-input" id="m-inv-grant-date" type="date"></div>
           <div class="form-group"><label class="form-label">Total Units Granted</label><input class="form-input" id="m-inv-units" type="number" placeholder="e.g. 500"></div>
-          <div class="form-group"><label class="form-label">Grant / Strike Price (₹/unit)</label><input class="form-input" id="m-inv-grant-price" type="number" placeholder="0 for RSUs"></div>
-          <div class="form-group"><label class="form-label">Current Price (₹/unit)</label><input class="form-input" id="m-inv-cur-price" type="number" placeholder="Latest valuation"></div>
+          <div class="form-group"><label class="form-label" id="inv-grant-price-label">Grant / Strike Price (₹/unit)</label><input class="form-input" id="m-inv-grant-price" type="number" placeholder="0 for RSUs"></div>
+          <div class="form-group"><label class="form-label" id="inv-cur-price-label">Current Price (₹/unit)</label><input class="form-input" id="m-inv-cur-price" type="number" placeholder="Latest valuation"></div>
           <div class="form-group"><label class="form-label">Vesting Period (months)</label><input class="form-input" id="m-inv-vest-months" type="number" placeholder="48" value="48"></div>
           <div class="form-group"><label class="form-label">Cliff Period (months)</label><input class="form-input" id="m-inv-cliff" type="number" placeholder="12" value="12"></div>
           <div class="form-group" style="grid-column:1/-1"><label class="form-label">Vesting Frequency</label>
