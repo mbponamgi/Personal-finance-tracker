@@ -4958,9 +4958,13 @@ async function parseCSV(event) {
 }
 
 function confirmImport() {
-  if (!parsedRows.length) return;
+  const m = currentMember === 'all' ? 'madhu' : currentMember;
+  let txnAccountId = '';
+  let cardUpdated = false;
+
+  // ── NPS: no metadata to update, just needs parsedRows ──────────────────────
   if (selectedBank === 'nps') {
-    const m = currentMember === 'all' ? 'madhu' : currentMember;
+    if (!parsedRows.length) return;
     if (!D.nps[m]) D.nps[m] = {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
     const data = parsedRows[0];
     if (data.pran) D.nps[m].pran = data.pran;
@@ -4968,47 +4972,47 @@ function confirmImport() {
     if (data.tier2) D.nps[m].tier2 = data.tier2;
     snapshotNW(); save(); renderAll();
     document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ Updated NPS Holdings</span>`;
-    document.getElementById('importConfirmBtn').textContent = 'Done ✓'; 
+    document.getElementById('importConfirmBtn').textContent = 'Done ✓';
     document.getElementById('importConfirmBtn').disabled = true;
     parsedRows = [];
     return;
   }
-  const cfg = BANK_CONFIGS[selectedBank];
-  const m = currentMember === 'all' ? 'madhu' : currentMember;
-  let txnAccountId = '';
 
+  // ── Bank account: find or create savings account ────────────────────────────
   if (selectedBank === 'icici-salary' || selectedBank === 'sc') {
     const bankName = selectedBank === 'icici-salary' ? 'ICICI Savings' : 'SC Savings';
     const bankKeyword = selectedBank === 'icici-salary' ? 'icici' : 'standard chartered';
     let existingAcc = D.accounts.find(a => a.member === m && a.name.toLowerCase().includes(bankKeyword));
     if (!existingAcc) {
       existingAcc = {
-        id: Date.now() + Math.random(),
-        name: bankName,
-        member: m,
-        type: 'savings',
-        balance: 0,
-        credits: 0,
-        debits: 0,
-        updated: todayStr()
+        id: Date.now() + Math.random(), name: bankName, member: m, type: 'savings',
+        balance: 0, credits: 0, debits: 0, updated: todayStr()
       };
       D.accounts.push(existingAcc);
     }
     txnAccountId = existingAcc.id;
-  } else if (selectedBank === 'icici-cc' || selectedBank === 'amex') {
+  }
+
+  // ── Credit card: update metadata FIRST, regardless of how many transactions ─
+  // This runs even when parsedRows is empty so that outstanding/limit/dueDate/minDue
+  // are always refreshed the moment the user clicks Import (not silently skipped).
+  else if (selectedBank === 'icici-cc' || selectedBank === 'amex') {
     if (detectedCardData) {
-      let existingCard = D.cards.find(c => c.member === m && c.name.toLowerCase().includes(detectedCardData.name.toLowerCase()));
+      // Bidirectional name match so "American Express" ↔ "American Express Platinum Reserve Credit Card"
+      // both resolve to the same existing card instead of creating a duplicate.
+      let existingCard = D.cards.find(c => c.member === m && (
+        c.name.toLowerCase().includes(detectedCardData.name.toLowerCase()) ||
+        detectedCardData.name.toLowerCase().includes(c.name.toLowerCase())
+      ));
       if (existingCard) {
-        existingCard.outstanding = detectedCardData.outstanding;
+        if (detectedCardData.outstanding > 0) existingCard.outstanding = detectedCardData.outstanding;
         if (detectedCardData.limit > 0) existingCard.limit = detectedCardData.limit;
         if (detectedCardData.dueDate) existingCard.dueDate = detectedCardData.dueDate;
         if (detectedCardData.minDue > 0) existingCard.minDue = detectedCardData.minDue;
         txnAccountId = existingCard.id;
       } else {
         const newCard = {
-          id: Date.now() + Math.random(),
-          name: detectedCardData.name,
-          member: m,
+          id: Date.now() + Math.random(), name: detectedCardData.name, member: m,
           outstanding: detectedCardData.outstanding,
           limit: detectedCardData.limit || 150000,
           dueDate: detectedCardData.dueDate || '',
@@ -5017,19 +5021,15 @@ function confirmImport() {
         D.cards.push(newCard);
         txnAccountId = newCard.id;
       }
-      detectedCardData = null; // Clear state
+      cardUpdated = true;
+      detectedCardData = null;
     } else {
       const defaultName = selectedBank === 'icici-cc' ? 'ICICI Credit Card' : 'American Express';
       let existingCard = D.cards.find(c => c.member === m && c.name.toLowerCase().includes(defaultName.toLowerCase()));
       if (!existingCard) {
         existingCard = {
-          id: Date.now() + Math.random(),
-          name: defaultName,
-          member: m,
-          outstanding: 0,
-          limit: 150000,
-          dueDate: '',
-          minDue: 0
+          id: Date.now() + Math.random(), name: defaultName, member: m,
+          outstanding: 0, limit: 150000, dueDate: '', minDue: 0
         };
         D.cards.push(existingCard);
       }
@@ -5037,17 +5037,33 @@ function confirmImport() {
     }
   }
 
+  // ── No transactions to import ───────────────────────────────────────────────
+  if (!parsedRows.length) {
+    if (cardUpdated) {
+      snapshotNW(); save(); renderAll();
+      document.getElementById('parse-status-badge').innerHTML =
+        `<span class="parse-status parse-ok">✓ Card details updated · No transactions found in statement</span>`;
+    } else {
+      document.getElementById('parse-status-badge').innerHTML =
+        `<span class="parse-status" style="background:var(--red-light);color:var(--red)">No data to import</span>`;
+    }
+    document.getElementById('importConfirmBtn').textContent = 'Done ✓';
+    document.getElementById('importConfirmBtn').disabled = true;
+    return;
+  }
+
+  // ── Import transactions ─────────────────────────────────────────────────────
   const existing = new Set(D.transactions.map(t => t.date+'|'+t.desc+'|'+t.amount));
   let added = 0, dupes = 0;
   parsedRows.forEach(r => {
     const key = r.date+'|'+r.desc+'|'+r.amount;
     if (existing.has(key)) { dupes++; return; }
     const cat = r.cat;
-    const type = cat === 'EMI' ? 'debit' : r.type; // Force EMI to always be debit
+    const type = cat === 'EMI' ? 'debit' : r.type;
     D.transactions.unshift({
       id: Date.now()+Math.random(),
       desc: r.desc, amount: r.amount, type: type,
-      cat: cat, member: currentMember === 'all' ? 'madhu' : currentMember,
+      cat: cat, member: m,
       date: r.date,
       account: txnAccountId
     });
@@ -5055,12 +5071,11 @@ function confirmImport() {
   });
   D.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  save(); renderAll();
-  let msg = `✓ Imported ${added} txns`;
-  msg += ` · ${dupes} duplicates skipped`;
-  
-  document.getElementById('parse-status-badge').innerHTML =
-    `<span class="parse-status parse-ok">${msg}</span>`;
+  snapshotNW(); save(); renderAll();
+  let msg = `✓ Imported ${added} transactions · ${dupes} duplicates skipped`;
+  if (cardUpdated) msg += ' · Card updated';
+
+  document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">${msg}</span>`;
   const btn = document.getElementById('importConfirmBtn');
   btn.textContent = 'Done ✓'; btn.disabled = true;
   parsedRows = [];
