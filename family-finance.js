@@ -58,10 +58,12 @@ function load() {
       if (D.epf && 'balance' in D.epf) {
         D.epf = { madhu: Object.assign({}, D.epf) };
       }
-      // Migrate D.rewards without member field → assign to 'madhu'
-      if (Array.isArray(D.rewards)) {
-        D.rewards.forEach(r => { if (!r.member) r.member = 'madhu'; });
-      }
+      // Migrate all data arrays: stamp member='madhu' on any item missing the field
+      ['accounts','cards','loans','investments','properties','gold','insurance','rewards','transactions'].forEach(key => {
+        if (Array.isArray(D[key])) {
+          D[key].forEach(item => { if (!item.member) item.member = 'madhu'; });
+        }
+      });
     }
   } catch(e) {}
 }
@@ -2076,11 +2078,11 @@ function renderAlerts() {
   if (t.gross > 0 && t.s80c < 150000) alerts.push({type:'info', msg:`Section 80C: ${fmt(150000-t.s80c)} headroom remaining.`});
   const npsData = getNpsData();
   if (npsData.fyContrib < 50000 && t.gross > 0) alerts.push({type:'info', msg:`NPS 80CCD(1B): ${fmt(50000-npsData.fyContrib)} unused — worth ${fmt((50000-npsData.fyContrib)*.312)} in tax savings.`});
-  D.insurance.filter(p => { const d=daysUntil(p.dueDate); return d!==null&&d<=30; }).forEach(p => {
+  filterByMember(D.insurance).filter(p => { const d=daysUntil(p.dueDate); return d!==null&&d<=30; }).forEach(p => {
     const d = daysUntil(p.dueDate);
     alerts.push({type:d<=0?'danger':'warn', msg:`${esc(p.name)} premium ${d<=0?'OVERDUE':'due in '+d+' days'} — ${fmt(p.premium)}`});
   });
-  D.properties.filter(p => { const d=daysUntil(p.propTaxDue); return d!==null&&d<=30&&d>0; }).forEach(p => {
+  filterByMember(D.properties).filter(p => { const d=daysUntil(p.propTaxDue); return d!==null&&d<=30&&d>0; }).forEach(p => {
     alerts.push({type:'warn', msg:`Property tax for ${esc(p.name)} due in ${daysUntil(p.propTaxDue)} days — ${fmt(p.propTax)}`});
   });
   const el = document.getElementById('ov-alerts');
@@ -3184,7 +3186,7 @@ function renderLoans() {
   }
 
   // 24b home loan deduction
-  const homeLoanInt = D.loans.filter(l=>l.type==='home').reduce((s,l)=>s+l.intPaid,0);
+  const homeLoanInt = filterByMember(D.loans).filter(l=>l.type==='home').reduce((s,l)=>s+l.intPaid,0);
   const capped = Math.min(homeLoanInt, 200000);
   document.getElementById('loan-24b-val').textContent = fmt(capped);
   document.getElementById('loan-24b-pct').textContent = pf(homeLoanInt,200000) + '%';
@@ -3656,7 +3658,7 @@ function renderTax() {
   const equityTypes = new Set(['Mutual Fund', 'Stock', 'ESOP', 'RSU']);
   const now = new Date();
   let ltcgGain = 0, stcgGain = 0, debtGain = 0, noDatesCount = 0;
-  D.investments.forEach(inv => {
+  filterByMember(D.investments).forEach(inv => {
     const pnl = (inv.value || 0) - (inv.cost || 0);
     if (pnl <= 0) return;
     const dateStr = isEsopType(inv.type) ? inv.grantDate : inv.purchaseDate;
@@ -3847,7 +3849,7 @@ function renderWidgets() {
     <div class="widget-chip ${vel>=0?'wchip-up':'wchip-down'}">${vel>=0?'&#8593; Growing':'&#8595; Shrinking'}</div>`;
 
   // 5. TAX HARVEST INTELLIGENCE
-  const investGains = D.investments.reduce((s,i)=>s+(i.value-i.cost),0);
+  const investGains = filterByMember(D.investments).reduce((s,i)=>s+(i.value-i.cost),0);
   const harvestRoom = Math.max(0,100000-Math.max(0,investGains));
   const npsDataW = getNpsData();
   const npsRoom = Math.max(0,50000-(npsDataW.fyContrib||0));
@@ -3860,8 +3862,9 @@ function renderWidgets() {
     ${s80cLeft>0?`<div class="widget-chip wchip-neutral" style="margin-left:4px">80C: ${fmt(s80cLeft)} left</div>`:''}`;
 
   // 6. CREDIT CARD OPTIMISATION SCORE
-  const totLim = D.cards.reduce((s,c)=>s+c.limit,0);
-  const totOut = D.cards.reduce((s,c)=>s+c.outstanding,0);
+  const memberCards = filterByMember(D.cards);
+  const totLim = memberCards.reduce((s,c)=>s+c.limit,0);
+  const totOut = memberCards.reduce((s,c)=>s+c.outstanding,0);
   const utilPct = totLim?Math.round(totOut/totLim*100):0;
   const score = Math.max(0,Math.min(100,100-utilPct*1.5));
   const scColor = score>=75?'var(--green)':score>=50?'var(--accent)':'var(--red)';
