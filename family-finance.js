@@ -4123,12 +4123,27 @@ function extractCardMetadata(text, bankType) {
       dueDate = parseDate(payM[2], 'DD/MM/YYYY') || '';
     }
 
-    // CREDIT LIMIT: statement has a two-row table — header row "Credit Limit Rs  Available Credit Limit Rs"
-    // then value row "At May 23, 2026  480,000.00  318,809.32". cleanText merges both rows into one string
-    // so the number is NOT adjacent to the label; skip over all non-digit text to reach the first value.
-    const limM = cleanText.match(/Credit Limit Rs\s+Available Credit Limit Rs[^0-9]*([\d,]+(?:\.\d{2})?)/i)
-      || cleanText.match(/Credit Limit[^0-9]{1,80}?([\d]{3,}(?:,\d{3})*(?:\.\d{2})?)/i);
-    if (limM) limit = parseFloat(limM[1].replace(/,/g,''));
+    // CREDIT LIMIT: statement has a two-row table:
+    //   Header line:  "Credit Limit Rs  Available Credit Limit Rs"
+    //   Values line:  "At May 23, 2026  480,000.00  318,809.32"
+    // Use the multi-line text to find the header line, then take the FIRST decimal
+    // number from the NEXT line.  cleanText collapses rows together and any regex
+    // that allows non-digit chars ends up capturing "23" from "May 23," instead.
+    const textLines = text.split('\n');
+    for (let li = 0; li < textLines.length - 1; li++) {
+      if (/Credit Limit Rs/i.test(textLines[li]) && /Available Credit Limit Rs/i.test(textLines[li])) {
+        const valNums = [...textLines[li + 1].matchAll(/[\d,]+\.\d{2}/g)];
+        if (valNums.length > 0) { limit = parseFloat(valNums[0][0].replace(/,/g,'')); break; }
+      }
+    }
+    // Fallback: find first monetary decimal after "Credit Limit" that is plausibly a limit (>= 10000)
+    if (limit === 0) {
+      const limFb = [...cleanText.matchAll(/Credit Limit[^]*?(\d[\d,]*\.\d{2})/gi)];
+      for (const m of limFb) {
+        const v = parseFloat(m[1].replace(/,/g,''));
+        if (v >= 10000) { limit = v; break; }
+      }
+    }
 
     // Fallback: closing balance from "= amount mindue" when formula match fails
     if (outstanding === 0) {
@@ -5039,16 +5054,17 @@ function confirmImport() {
 
   // ── No transactions to import ───────────────────────────────────────────────
   if (!parsedRows.length) {
-    if (cardUpdated) {
-      snapshotNW(); save(); renderAll();
-      document.getElementById('parse-status-badge').innerHTML =
-        `<span class="parse-status parse-ok">✓ Card details updated · No transactions found in statement</span>`;
-    } else {
-      document.getElementById('parse-status-badge').innerHTML =
-        `<span class="parse-status" style="background:var(--red-light);color:var(--red)">No data to import</span>`;
-    }
+    const noTxnMsg = cardUpdated
+      ? '✓ Card details updated · No transactions found in statement'
+      : 'No data to import';
+    const noTxnOk = cardUpdated;
+    if (cardUpdated) { snapshotNW(); save(); }
+    document.getElementById('parse-status-badge').innerHTML =
+      `<span class="parse-status${noTxnOk ? ' parse-ok' : ''}" ${noTxnOk ? '' : 'style="background:var(--red-light);color:var(--red)"'}>${noTxnMsg}</span>`;
     document.getElementById('importConfirmBtn').textContent = 'Done ✓';
     document.getElementById('importConfirmBtn').disabled = true;
+    parsedRows = [];
+    if (cardUpdated) renderAll(); // refresh after UI feedback so any render error doesn't block it
     return;
   }
 
@@ -5058,27 +5074,30 @@ function confirmImport() {
   parsedRows.forEach(r => {
     const key = r.date+'|'+r.desc+'|'+r.amount;
     if (existing.has(key)) { dupes++; return; }
-    const cat = r.cat;
-    const type = cat === 'EMI' ? 'debit' : r.type;
+    const cat = r.cat || 'Other';
+    const type = cat === 'EMI' ? 'debit' : (r.type || 'debit');
     D.transactions.unshift({
       id: Date.now()+Math.random(),
-      desc: r.desc, amount: r.amount, type: type,
+      desc: r.desc || '', amount: r.amount || 0, type: type,
       cat: cat, member: m,
-      date: r.date,
+      date: r.date || todayStr(),
       account: txnAccountId
     });
     added++;
   });
   D.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  snapshotNW(); save(); renderAll();
+  // Save data and show feedback BEFORE renderAll so a render error never hides "Done ✓"
+  snapshotNW(); save();
   let msg = `✓ Imported ${added} transactions · ${dupes} duplicates skipped`;
   if (cardUpdated) msg += ' · Card updated';
+  if (added === 0 && dupes > 0) msg = `All ${dupes} transactions already imported (duplicates skipped)`;
 
   document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">${msg}</span>`;
   const btn = document.getElementById('importConfirmBtn');
   btn.textContent = 'Done ✓'; btn.disabled = true;
   parsedRows = [];
+  renderAll(); // refresh after UI is already updated
 }
 
 // ─────────────────────────────────────────────
