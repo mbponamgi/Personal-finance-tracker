@@ -4107,18 +4107,41 @@ function extractCardMetadata(text, bankType) {
     // Extract card product name (e.g. "American Express Platinum Reserve Credit Card")
     const cnMatch = text.match(/American Express[®\s\w™℠]*?Credit Card/i);
     name = cnMatch ? cnMatch[0].replace(/[®℠™]/g,'').replace(/\s+/g,' ').trim() : 'American Express';
-    // Closing balance from balance formula: opening - credits + debits = closing minDue
-    const balLine = cleanText.match(/([\d,]+\.\d{2})\s*-\s*([\d,]+\.\d{2})\s*\+\s*([\d,]+\.\d{2})\s*=\s*([\d,]+\.\d{2})/);
-    if (balLine) outstanding = parseFloat(balLine[4].replace(/,/g,''));
-    // Min due + due date from "payment of Rs. X by DD/MM/YYYY"
-    const payLine = cleanText.match(/payment\s+of\s+Rs\.?\s*([\d,]+\.\d{2})\s+by\s+(\d{2}\/\d{2}\/\d{4})/i);
-    if (payLine) {
-      minDue = parseFloat(payLine[1].replace(/,/g,''));
-      dueDate = parseDate(payLine[2], 'DD/MM/YYYY') || '';
+
+    // OUTSTANDING: balance formula row "open [–/-] credits + debits = CLOSING [mindue]"
+    // [–\-−] covers en-dash (–), ASCII hyphen (-), and Unicode minus sign (−)
+    const balM = cleanText.match(/([\d,]+\.\d{2})\s*[–\-−]\s*([\d,]+\.\d{2})\s*\+\s*([\d,]+\.\d{2})\s*=\s*([\d,]+\.\d{2})(?:\s+([\d,]+\.\d{2}))?/);
+    if (balM) {
+      outstanding = parseFloat(balM[4].replace(/,/g,''));
+      if (balM[5]) minDue = parseFloat(balM[5].replace(/,/g,''));
     }
-    // Credit limit from "Credit Limit Rs X"
-    const limAmex = cleanText.match(/Credit Limit Rs\s*([\d,]+(?:\.\d{2})?)/i);
-    if (limAmex) limit = parseFloat(limAmex[1].replace(/,/g,''));
+
+    // MIN DUE + DUE DATE: "receiving your payment of Rs. 20,896.12 by 15/06/2026"
+    const payM = cleanText.match(/payment\s+of\s+Rs\.?\s*([\d,]+\.\d{2})\s+by\s+(\d{2}\/\d{2}\/\d{4})/i);
+    if (payM) {
+      if (!minDue) minDue = parseFloat(payM[1].replace(/,/g,''));
+      dueDate = parseDate(payM[2], 'DD/MM/YYYY') || '';
+    }
+
+    // CREDIT LIMIT: statement has a two-row table — header row "Credit Limit Rs  Available Credit Limit Rs"
+    // then value row "At May 23, 2026  480,000.00  318,809.32". cleanText merges both rows into one string
+    // so the number is NOT adjacent to the label; skip over all non-digit text to reach the first value.
+    const limM = cleanText.match(/Credit Limit Rs\s+Available Credit Limit Rs[^0-9]*([\d,]+(?:\.\d{2})?)/i)
+      || cleanText.match(/Credit Limit[^0-9]{1,80}?([\d]{3,}(?:,\d{3})*(?:\.\d{2})?)/i);
+    if (limM) limit = parseFloat(limM[1].replace(/,/g,''));
+
+    // Fallback: closing balance from "= amount mindue" when formula match fails
+    if (outstanding === 0) {
+      const eqM = cleanText.match(/=\s*([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/);
+      if (eqM) outstanding = parseFloat(eqM[1].replace(/,/g,''));
+    }
+    if (limit === 0) limit = 150000;
+    if (minDue === 0 && outstanding > 0) minDue = Math.round(outstanding * 0.05);
+
+    // Return early — bypass generic patterns which would corrupt correct Amex values.
+    // The generic duePattern matches the statement date (23/05/2026) before the due date (15/06/2026),
+    // and generic outPatterns match "payment due" in "Min Payment Due Rs" giving the opening balance.
+    return { name, outstanding, limit, dueDate, minDue };
   } else if (bankType === 'sc') {
     name = "Standard Chartered Card";
   } else {
