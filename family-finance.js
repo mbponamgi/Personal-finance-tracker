@@ -4104,13 +4104,28 @@ function extractCardMetadata(text, bankType) {
   if (bankType === 'icici-cc') {
     name = "ICICI Credit Card";
   } else if (bankType === 'amex') {
-    name = "American Express Card";
+    // Extract card product name (e.g. "American Express Platinum Reserve Credit Card")
+    const cnMatch = text.match(/American Express[®\s\w™℠]*?Credit Card/i);
+    name = cnMatch ? cnMatch[0].replace(/[®℠™]/g,'').replace(/\s+/g,' ').trim() : 'American Express';
+    // Closing balance from balance formula: opening - credits + debits = closing minDue
+    const balLine = cleanText.match(/([\d,]+\.\d{2})\s*-\s*([\d,]+\.\d{2})\s*\+\s*([\d,]+\.\d{2})\s*=\s*([\d,]+\.\d{2})/);
+    if (balLine) outstanding = parseFloat(balLine[4].replace(/,/g,''));
+    // Min due + due date from "payment of Rs. X by DD/MM/YYYY"
+    const payLine = cleanText.match(/payment\s+of\s+Rs\.?\s*([\d,]+\.\d{2})\s+by\s+(\d{2}\/\d{2}\/\d{4})/i);
+    if (payLine) {
+      minDue = parseFloat(payLine[1].replace(/,/g,''));
+      dueDate = parseDate(payLine[2], 'DD/MM/YYYY') || '';
+    }
+    // Credit limit from "Credit Limit Rs X"
+    const limAmex = cleanText.match(/Credit Limit Rs\s*([\d,]+(?:\.\d{2})?)/i);
+    if (limAmex) limit = parseFloat(limAmex[1].replace(/,/g,''));
   } else if (bankType === 'sc') {
     name = "Standard Chartered Card";
   } else {
     name = "Credit Card";
   }
-  
+
+  // Generic fallback patterns (run for non-Amex or when Amex-specific didn't find values)
   const outPatterns = [
     /(?:total\s+amount\s+due|total\s+due|amount\s+due|outstanding\s+balance|total\s+outstanding)\D*?([\d,]+\.\d{2})/i,
     /(?:payment\s+due|due\s+amount)\D*?([\d,]+\.\d{2})/i
@@ -4228,6 +4243,70 @@ function parseBankStatementPdf(text, bankType) {
   const lines = text.split('\n');
   const txns = [];
 
+  // ── AMEX PDF: dates use "May 03" / "May 9" (MMM D, no year) ──────────────────
+  if (bankType === 'amex') {
+    const amexDateReg = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\b/i;
+    const MON = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    // Infer year from any 4-digit year in the statement text
+    const yrM = text.match(/\b(20\d{2})\b/);
+    const yr = yrM ? +yrM[1] : new Date().getFullYear();
+
+    // Lines to skip: section headers, summaries, footnotes, metadata
+    const skipReg = /^(total\s+of|new\s+domestic|summary\b|card\s+number|page\s+\d|\d+\s+of\s+\d+|prepared\s+for|statement\s+(period|date)|credit\s+summary|current\s+rates|details\b|foreign\s+spending|amount\s+rs|installment\s+plan\s+(summary|transactions)|other\s+account\s+transactions|payment\s+(information|methods|faq|advice)|national\s+electronic|payee|ifsc|drop\s+box|upi\b|permanent\s+account|gstin\b|category:|grievances|nodal\s+officer|banking\s+ombudsman|making\s+only|note:|sample\s+interest|insurance\s+cover|coverages\b|disclaimer\b|mitc\b|date\s+of\s+activation|nac\s+terms|contact\s+details|email|icici\s+lombard|please\b|opening\s+balance|cardmember\s+offer|we\s+have\s+made|missing\s+payment|procedure\s+to\s+be|annual\s+fee|interest\s+free|for\s+further|telephone|address:|head\s+of\s+customer|incorporated\s+with|minimum\s+payment\s+due$|minimum\s+payment\s+every|statement\s+includes|making\s+only|due\s+date|send\s+payment)/i;
+
+    let i = 0;
+    while (i < lines.length) {
+      const raw = lines[i].trim();
+      i++;
+      if (!raw || skipReg.test(raw)) continue;
+
+      const dm = raw.match(amexDateReg);
+      if (!dm) continue;
+
+      const mon = MON[dm[1].toLowerCase()];
+      const day = +dm[2];
+      const date = `${yr}-${String(mon+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+      // Everything after the date token on this line
+      const rest = raw.substring(dm[0].length).trim();
+
+      // CR already on this line?
+      let isCR = /\bCR\s*$/i.test(rest);
+
+      // Peek at the following lines for the CR marker
+      while (!isCR && i < lines.length) {
+        const peek = lines[i].trim();
+        if (/^CR\s*$/i.test(peek)) { isCR = true; i++; break; }
+        if (/^Card Number/i.test(peek)) {
+          if (/\bCR\b/i.test(peek)) isCR = true;
+          i++; // consume "Card Number…" line then keep peeking
+          continue;
+        }
+        break; // unrelated line → stop peeking
+      }
+
+      // Amount: last decimal number on the rest-of-line
+      const amtMatches = [...rest.matchAll(/[\d,]+\.\d{2}/g)];
+      if (!amtMatches.length) continue;
+      const amount = parseFloat(amtMatches[amtMatches.length-1][0].replace(/,/g,''));
+
+      // Description: text before the first number
+      const firstNumIdx = rest.search(/[\d,]+\.\d{2}/);
+      let desc = (firstNumIdx > 0 ? rest.substring(0, firstNumIdx) : rest)
+        .replace(/\bCR\s*$/i,'').replace(/\t/g,' ').trim();
+      desc = desc.replace(/^[\s\-,|\/\t]+/,'').replace(/[\s\-,|\/\t]+$/,'');
+      if (!desc || desc.length < 2) desc = 'Transaction';
+
+      const type = (isCR || /payment|refund|reversal|cashback/i.test(desc)) ? 'credit' : 'debit';
+
+      if (amount > 0) {
+        txns.push({ date, desc, amount, type, cat: autoCategory(desc, amount) });
+      }
+    }
+    return txns;
+  }
+
+  // ── Generic parser (ICICI Savings, ICICI CC, SC) ──────────────────────────────
   // Matches DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY AND DD MMM YYYY (e.g. "05 Jun 2026")
   const dateReg = /\b(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4}|\d{2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4})\b/i;
   // Finds all monetary amounts: optional ₹, digits with commas, mandatory 2-decimal
