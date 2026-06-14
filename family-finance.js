@@ -28,7 +28,7 @@ let D = {
   gold: [],
   goldRate: 7500,
   fxRates: {},
-  epf:  {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null, birthYear:0, retireAge:60},
+  epf:  {},
   gratuity: {employer:'', joiningDate:'', basicDA:0, actualAccrued:0},
   nps:  {},
   tax:  {},
@@ -53,6 +53,14 @@ function load() {
       // Migrate flat D.tax to per-member structure
       if (D.tax && 'gross' in D.tax) {
         D.tax = { madhu: Object.assign({}, D.tax) };
+      }
+      // Migrate flat D.epf to per-member structure
+      if (D.epf && 'balance' in D.epf) {
+        D.epf = { madhu: Object.assign({}, D.epf) };
+      }
+      // Migrate D.rewards without member field → assign to 'madhu'
+      if (Array.isArray(D.rewards)) {
+        D.rewards.forEach(r => { if (!r.member) r.member = 'madhu'; });
       }
     }
   } catch(e) {}
@@ -269,10 +277,12 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 function openRewardModal(id) {
   migrateRewards();
   const r = id ? D.rewards.find(x => x.id === id) : null;
+  const defaultMember = currentMember === 'all' ? 'madhu' : currentMember;
   document.getElementById('rewardModalTitle').textContent = r ? 'Edit Reward Program' : 'Add Reward Program';
   document.getElementById('m-rw-id').value = r ? r.id : '';
   document.getElementById('m-rw-name').value = r ? r.name : '';
   document.getElementById('m-rw-prog').value = r ? r.program : 'default';
+  document.getElementById('m-rw-member').value = r ? (r.member || defaultMember) : defaultMember;
   document.getElementById('m-rw-pts').value = r ? r.points : '';
   document.getElementById('m-rw-rate').value = r ? r.rate : '0.25';
   document.getElementById('m-rw-exp').value = r ? r.expiry : '';
@@ -613,6 +623,7 @@ function saveReward() {
     id: id ? +id : Date.now(),
     name,
     program: prog,
+    member: document.getElementById('m-rw-member').value || 'madhu',
     points: +document.getElementById('m-rw-pts').value || 0,
     rate: +document.getElementById('m-rw-rate').value || 0.25,
     expiry: document.getElementById('m-rw-exp').value,
@@ -1069,7 +1080,9 @@ function saveGratuity() {
 }
 
 function openEPFModal() {
-  const e = D.epf;
+  const m = currentMember === 'all' ? 'madhu' : currentMember;
+  const e = D.epf[m] || Object.assign({}, EPF_EMPTY);
+  document.getElementById('epfModalTitle').textContent = 'Update EPF — ' + (MEMBER_NAMES[m] || m);
   document.getElementById('m-epf-uan').value = e.uan || '';
   document.getElementById('m-epf-bal').value = e.balance || '';
   document.getElementById('m-epf-emp').value = e.empShare || '';
@@ -1081,7 +1094,8 @@ function openEPFModal() {
 }
 
 function saveEPF() {
-  D.epf = {
+  const m = currentMember === 'all' ? 'madhu' : currentMember;
+  D.epf[m] = {
     uan: document.getElementById('m-epf-uan').value,
     balance: +document.getElementById('m-epf-bal').value || 0,
     empShare: +document.getElementById('m-epf-emp').value || 0,
@@ -1336,7 +1350,9 @@ function calcNW() {
   const goldVal = calcGoldValue();
   let npsTotal = 0;
   Object.values(D.nps).forEach(n => { npsTotal += (n.tier1||0) + (n.tier2||0); });
-  const ret = D.epf.balance + npsTotal + getGratuityValue();
+  let epfTotal = 0;
+  Object.values(D.epf).forEach(e => { epfTotal += (e.balance||0); });
+  const ret = epfTotal + npsTotal + getGratuityValue();
   const loanLiab = D.loans.reduce((s, l) => s + l.outstanding, 0);
   const cardLiab = D.cards.reduce((s, c) => s + c.outstanding, 0);
   return liq + inv + prop + goldVal + ret - loanLiab - cardLiab;
@@ -1361,7 +1377,9 @@ function snapshotNW() {
   const goldVal = filterByMember(D.gold).reduce((s, g) => s + g.weight * ((g.purity||22)/24) * (D.goldRate||7500), 0);
   const npsData = getNpsData();
   const npsTotal = npsData.tier1 + npsData.tier2;
-  const assetsVal = liq + propVal + inv + goldVal + D.epf.balance + npsTotal + getGratuityValue();
+  let epfTotalSnap = 0;
+  Object.values(D.epf).forEach(e => { epfTotalSnap += (e.balance||0); });
+  const assetsVal = liq + propVal + inv + goldVal + epfTotalSnap + npsTotal + getGratuityValue();
   const loanLiab = filterByMember(D.loans).reduce((s, l) => s + l.outstanding, 0);
   const cardLiab = filterByMember(D.cards).reduce((s, c) => s + c.outstanding, 0);
   const liabsVal = loanLiab + cardLiab;
@@ -1556,7 +1574,10 @@ function renderOv() {
   const totalLiab = loanLiab + cardLiab;
   const npsData = getNpsData();
   const npsTotal = npsData.tier1 + npsData.tier2;
-  const epfGratuity = currentMember === 'all' ? D.epf.balance + getGratuityValue() : 0;
+  const epfBalance = currentMember === 'all'
+    ? Object.values(D.epf).reduce((s, e) => s + (e.balance||0), 0)
+    : (D.epf[currentMember] ? (D.epf[currentMember].balance || 0) : 0);
+  const epfGratuity = epfBalance + (currentMember === 'all' ? getGratuityValue() : 0);
   const nw = liq + propVal + inv + goldVal + epfGratuity + npsTotal - totalLiab;
 
   document.getElementById('ov-nw').textContent = fmt(nw);
@@ -1943,7 +1964,8 @@ function renderNWChart() {
 }
 
 function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
-  const totalAssets = liq + propVal + inv + goldVal + D.epf.balance + npsTotal + getGratuityValue();
+  const epfForDoughnut = Object.values(D.epf).reduce((s, e) => s + (e.balance||0), 0);
+  const totalAssets = liq + propVal + inv + goldVal + epfForDoughnut + npsTotal + getGratuityValue();
   const assetEl = document.getElementById('ov-assets-breakdown');
   const canvas = document.getElementById('assetDoughnutCanvas');
   
@@ -1961,7 +1983,7 @@ function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
   
   const ctx = canvas.getContext('2d');
   
-  const epfNps = D.epf.balance + npsTotal + getGratuityValue();
+  const epfNps = epfForDoughnut + npsTotal + getGratuityValue();
   const innerGroups = [liq + inv + goldVal, propVal, epfNps];
   const outerClasses = [liq, inv, goldVal, propVal, epfNps];
 
@@ -2153,7 +2175,7 @@ function renderCards() {
 // ─────────────────────────────────────────────
 function renderRewards() {
   migrateRewards();
-  const list = D.rewards;
+  const list = filterByMember(D.rewards);
   const now = new Date();
   const totalVal = list.reduce((s, r) => s + r.points * r.rate, 0);
   const expiringSoon = list.filter(r => {
@@ -2648,7 +2670,7 @@ function renderInv() {
 // EPF
 // ─────────────────────────────────────────────
 function renderEPF() {
-  const e = D.epf;
+  const e = getEpfData();
   document.getElementById('epf-bal-display').textContent = fmt(e.balance);
   document.getElementById('epf-monthly-display').textContent = fmt(e.monthly);
   document.getElementById('epf-uan-d').textContent = e.uan || '—';
@@ -2696,6 +2718,9 @@ function renderEPF() {
   // Retirement Projection
   const projEl = document.getElementById('epf-projection-body');
   if (projEl) {
+    if (currentMember === 'all') {
+      projEl.innerHTML = '<div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Select a specific family member to see their EPF retirement projection.</span></div>';
+    } else {
     const birthYear = e.birthYear || 0;
     const retireAge = e.retireAge || 60;
     if (!birthYear) {
@@ -2734,6 +2759,7 @@ function renderEPF() {
         </div>
         <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Projection assumes current balance of ${fmt(P)} + ${fmt(C)}/mo contributions compounding at 8.25% p.a. Does not account for future salary increments.</span></div>`;
     }
+    } // end else (specific member)
   }
 }
 
@@ -2747,6 +2773,16 @@ function getNpsData() {
     return { pran:Object.keys(D.nps).length > 1 ? 'Multiple' : (Object.values(D.nps)[0]?.pran || ''), tier1:t1, tier2:t2, fyContrib:fyc, monthly:mo, equityPct:'-' };
   }
   return D.nps[currentMember] || {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
+}
+
+const EPF_EMPTY = {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null, birthYear:0, retireAge:60};
+function getEpfData() {
+  if (currentMember === 'all') {
+    let bal=0, emp=0, er=0, mo=0;
+    Object.values(D.epf).forEach(e => { bal+=(e.balance||0); emp+=(e.empShare||0); er+=(e.erShare||0); mo+=(e.monthly||0); });
+    return Object.assign({}, EPF_EMPTY, { balance:bal, empShare:emp, erShare:er, monthly:mo });
+  }
+  return D.epf[currentMember] || Object.assign({}, EPF_EMPTY);
 }
 
 function renderNPS() {
@@ -3754,7 +3790,7 @@ function resetTxnFilters() {
 
 function renderWidgets() {
   if (!document.getElementById('w-salary')) return;
-  const txns = D.transactions;
+  const txns = filterByMember(D.transactions);
   const now = new Date();
   const cm = now.getMonth(), cy = now.getFullYear();
   const pm = cm===0?11:cm-1, py = cm===0?cy-1:cy;
@@ -3836,15 +3872,16 @@ function renderWidgets() {
     <div class="widget-sub">Utilization ${utilPct}% &middot; ${fmt(Math.max(0,totLim-totOut))} available</div>`;
 
   // 7. DEBT PAYDOWN VISUALISER
-  const totDebt = D.loans.reduce((s,l)=>s+l.outstanding,0);
-  const totPrinc = D.loans.reduce((s,l)=>s+l.principal,0);
+  const memberLoans = filterByMember(D.loans);
+  const totDebt = memberLoans.reduce((s,l)=>s+l.outstanding,0);
+  const totPrinc = memberLoans.reduce((s,l)=>s+l.principal,0);
   const paidPct = totPrinc?Math.round((1-totDebt/totPrinc)*100):0;
-  const totEMI  = D.loans.reduce((s,l)=>s+l.emi,0);
+  const totEMI  = memberLoans.reduce((s,l)=>s+l.emi,0);
   document.getElementById('w-debt-paydown').innerHTML = `
     <div class="widget-label">&#x1F3AF; Debt Paydown</div>
     <div class="widget-value" style="color:var(--red)">${fmt(totDebt)}</div>
     <div class="widget-bar-row"><div class="widget-bar-bg"><div class="widget-bar-fill" style="width:${paidPct}%;background:var(--green)"></div></div><span style="font-size:10px;color:var(--muted);margin-left:4px">${paidPct}% paid</span></div>
-    <div class="widget-sub">EMI: ${fmt(totEMI)}/mo &middot; ${D.loans.length} loan(s)</div>`;
+    <div class="widget-sub">EMI: ${fmt(totEMI)}/mo &middot; ${memberLoans.length} loan(s)</div>`;
 
   // 8. LIFESTYLE INFLATION DETECTOR
   const skip = ['Salary','Investment','EMI'];
@@ -3862,7 +3899,7 @@ function renderWidgets() {
 function openSalaryHistory() {
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const now = new Date();
-  const salTxns = D.transactions.filter(t =>
+  const salTxns = filterByMember(D.transactions).filter(t =>
     t.type === 'credit' && (t.cat === 'Salary' || /salary|salaries|neft.*cr|salary.*credit|inward.*salary/i.test(t.desc || ''))
   );
 

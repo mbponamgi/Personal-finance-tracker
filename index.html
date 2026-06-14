@@ -1432,6 +1432,11 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
           </optgroup>
         </select>
       </div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-rw-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
       <div class="form-group"><label class="form-label">Points Balance</label><input class="form-input" id="m-rw-pts" type="number" placeholder="0"></div>
       <div class="form-group"><label class="form-label">Value per Point (₹)</label><input class="form-input" id="m-rw-rate" type="number" step="0.01" placeholder="0.25"></div>
       <div class="form-group"><label class="form-label">Expiry Date</label><input class="form-input" id="m-rw-exp" type="date"></div>
@@ -1757,7 +1762,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
 <div class="modal-backdrop" id="epfModal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('epfModal')">×</button>
-    <div class="modal-title">Update EPF</div>
+    <div class="modal-title" id="epfModalTitle">Update EPF</div>
     <div class="form-grid">
       <div class="form-group form-full"><label class="form-label">UAN</label><input class="form-input" id="m-epf-uan" placeholder="Universal Account Number"></div>
       <div class="form-group"><label class="form-label">Total Balance (₹)</label><input class="form-input" id="m-epf-bal" type="number" placeholder="0"></div>
