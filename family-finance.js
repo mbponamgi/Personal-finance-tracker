@@ -25,10 +25,11 @@ let D = {
   insurance: [],
   properties: [],
   loans: [],
+  dismissedAutoLoans: [],
   gold: [],
   goldRate: 7500,
   fxRates: {},
-  epf:  {},
+  epf:  {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null, birthYear:0, retireAge:60},
   gratuity: {employer:'', joiningDate:'', basicDA:0, actualAccrued:0},
   nps:  {},
   tax:  {},
@@ -54,16 +55,6 @@ function load() {
       if (D.tax && 'gross' in D.tax) {
         D.tax = { madhu: Object.assign({}, D.tax) };
       }
-      // Migrate flat D.epf to per-member structure
-      if (D.epf && 'balance' in D.epf) {
-        D.epf = { madhu: Object.assign({}, D.epf) };
-      }
-      // Migrate all data arrays: stamp member='madhu' on any item missing the field
-      ['accounts','cards','loans','investments','properties','gold','insurance','rewards','transactions'].forEach(key => {
-        if (Array.isArray(D[key])) {
-          D[key].forEach(item => { if (!item.member) item.member = 'madhu'; });
-        }
-      });
     }
   } catch(e) {}
 }
@@ -279,12 +270,10 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 function openRewardModal(id) {
   migrateRewards();
   const r = id ? D.rewards.find(x => x.id === id) : null;
-  const defaultMember = currentMember === 'all' ? 'madhu' : currentMember;
   document.getElementById('rewardModalTitle').textContent = r ? 'Edit Reward Program' : 'Add Reward Program';
   document.getElementById('m-rw-id').value = r ? r.id : '';
   document.getElementById('m-rw-name').value = r ? r.name : '';
   document.getElementById('m-rw-prog').value = r ? r.program : 'default';
-  document.getElementById('m-rw-member').value = r ? (r.member || defaultMember) : defaultMember;
   document.getElementById('m-rw-pts').value = r ? r.points : '';
   document.getElementById('m-rw-rate').value = r ? r.rate : '0.25';
   document.getElementById('m-rw-exp').value = r ? r.expiry : '';
@@ -625,7 +614,6 @@ function saveReward() {
     id: id ? +id : Date.now(),
     name,
     program: prog,
-    member: document.getElementById('m-rw-member').value || 'madhu',
     points: +document.getElementById('m-rw-pts').value || 0,
     rate: +document.getElementById('m-rw-rate').value || 0.25,
     expiry: document.getElementById('m-rw-exp').value,
@@ -674,6 +662,7 @@ function deleteProp(id) {
 
 function saveLoan() {
   const id = document.getElementById('m-loan-id').value;
+  const existing = id ? D.loans.find(l => l.id == id) : null;
   const loan = {
     id: id ? +id : Date.now(),
     name: document.getElementById('m-loan-name').value,
@@ -690,6 +679,13 @@ function saveLoan() {
     startDate: document.getElementById('m-loan-start').value
   };
   if (!loan.name) return;
+  // Preserve the auto-detection linkage when editing an auto-detected loan, so renaming
+  // it or changing its EMI doesn't make syncLoansFromTxns() spawn a duplicate from the
+  // same transaction. The autoKey is a stable link to the source transaction.
+  if (existing && existing.autoDetected) {
+    loan.autoDetected = true;
+    if (existing.autoKey) loan.autoKey = existing.autoKey;
+  }
   upsert(D.loans, loan);
   snapshotNW(); save(); renderAll(); closeModal('loanModal');
   document.getElementById('m-loan-id').value = '';
@@ -697,7 +693,38 @@ function saveLoan() {
 }
 
 function deleteLoan(id) {
-  D.loans = D.loans.filter(l => l.id !== id);
+  // Loose match (==) so a string id from an inline onclick still matches a numeric stored id.
+  const loan = D.loans.find(l => l.id == id);
+  if (!loan) return;
+  if (!confirm(`Delete "${loan.name}"?\n\nThis also stops it from being auto-detected again from your transactions.`)) return;
+
+  if (!D.dismissedAutoLoans) D.dismissedAutoLoans = [];
+  const add = k => { if (k && !D.dismissedAutoLoans.includes(k)) D.dismissedAutoLoans.push(k); };
+
+  // 1) Direct keys derived from the loan record itself (covers auto + legacy + manual).
+  add(loan.autoKey);
+  add(loan.name + '_' + loan.emi);
+  add('amt:' + Math.round(loan.emi || 0));
+
+  // 2) Decisive fix for "won't stay deleted": tombstone every transaction that could
+  //    regenerate this loan, using the SAME key the detector builds (autoLoanKey).
+  //    This works even if the loan was renamed or its EMI edited after auto-creation,
+  //    because we match source transactions by EMI amount OR name overlap and key them
+  //    identically to syncLoansFromTxns().
+  const loanEmi = Number(loan.emi);
+  const lname = (loan.name || '').toLowerCase();
+  D.transactions.forEach(t => {
+    const tAmt = Number(t.amount);
+    const tdesc = (t.desc || '').toLowerCase();
+    const emiMatch = !isNaN(loanEmi) && Math.abs(loanEmi - tAmt) < 10;
+    const nameMatch = lname && tdesc && (tdesc.includes(lname) || lname.includes(tdesc));
+    if (emiMatch || nameMatch) {
+      add(autoLoanKey(t.desc, t.amount));
+      add('amt:' + Math.round(tAmt));
+    }
+  });
+
+  D.loans = D.loans.filter(l => l.id != id);
   snapshotNW(); save(); renderAll();
 }
 
@@ -1082,9 +1109,7 @@ function saveGratuity() {
 }
 
 function openEPFModal() {
-  const m = currentMember === 'all' ? 'madhu' : currentMember;
-  const e = D.epf[m] || Object.assign({}, EPF_EMPTY);
-  document.getElementById('epfModalTitle').textContent = 'Update EPF — ' + (MEMBER_NAMES[m] || m);
+  const e = D.epf;
   document.getElementById('m-epf-uan').value = e.uan || '';
   document.getElementById('m-epf-bal').value = e.balance || '';
   document.getElementById('m-epf-emp').value = e.empShare || '';
@@ -1096,8 +1121,7 @@ function openEPFModal() {
 }
 
 function saveEPF() {
-  const m = currentMember === 'all' ? 'madhu' : currentMember;
-  D.epf[m] = {
+  D.epf = {
     uan: document.getElementById('m-epf-uan').value,
     balance: +document.getElementById('m-epf-bal').value || 0,
     empShare: +document.getElementById('m-epf-emp').value || 0,
@@ -1148,7 +1172,10 @@ function getTaxMember() {
 
 function currentTax() {
   const m = getTaxMember();
-  return D.tax[m] || {gross:0, s80c:0, s80ccd:0, s24b:0, s80d:0, hra:0};
+  const base = {gross:0, s80c:0, s80ccd:0, s24b:0, s80d:0, hra:0,
+                exemptOther:0, profTax:0, s80ccd2:0, s80e:0, s80g:0, s80tta:0, tds:0,
+                employer:'', tan:'', ay:''};
+  return Object.assign(base, D.tax[m] || {});
 }
 
 function openTaxModal() {
@@ -1165,15 +1192,94 @@ function openTaxModal() {
 function saveTax() {
   const m = getTaxMember();
   if (!D.tax) D.tax = {};
-  D.tax[m] = {
+  D.tax[m] = Object.assign({}, D.tax[m] || {}, {
     gross: +document.getElementById('m-tax-gross').value || 0,
     s80c: Math.min(+document.getElementById('m-tax-80c').value || 0, 150000),
     s80ccd: Math.min(+document.getElementById('m-tax-nps').value || 0, 50000),
     s24b: Math.min(+document.getElementById('m-tax-hl').value || 0, 200000),
     s80d: Math.min(+document.getElementById('m-tax-80d').value || 0, 75000),
     hra: +document.getElementById('m-tax-hra').value || 0
-  };
+  });
   save(); renderAll(); closeModal('taxModal');
+}
+
+// ── Form 16 Analyzer ──
+let form16Parsed = null;
+
+function openForm16Modal() {
+  const t = currentTax();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('f16-employer', t.employer); set('f16-tan', t.tan); set('f16-ay', t.ay || '2026-27');
+  set('f16-gross', t.gross); set('f16-exempt', t.exemptOther); set('f16-hra', t.hra);
+  set('f16-proftax', t.profTax); set('f16-80c', t.s80c); set('f16-80ccd1b', t.s80ccd);
+  set('f16-80ccd2', t.s80ccd2); set('f16-80d', t.s80d); set('f16-24b', t.s24b);
+  set('f16-80e', t.s80e); set('f16-80g', t.s80g); set('f16-80tta', t.s80tta); set('f16-tds', t.tds);
+  const badge = document.getElementById('f16-parse-status');
+  if (badge) badge.innerHTML = '';
+  openModal('form16Modal');
+}
+
+async function handleForm16Upload(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const badge = document.getElementById('f16-parse-status');
+  const setBadge = (html) => { if (badge) badge.innerHTML = html; };
+  setBadge(`<span class="parse-status">⏳ Reading ${esc(file.name)}…</span>`);
+  try {
+    const pdfjs = await ensurePdfJS();
+    const buf = await file.arrayBuffer();
+    let pwd = '';
+    let pdf;
+    while (true) {
+      try {
+        pdf = await pdfjs.getDocument({ data: new Uint8Array(buf), password: pwd }).promise;
+        break;
+      } catch (e) {
+        if (e.name === 'PasswordException') {
+          pwd = prompt('Form 16 is password-protected. Enter password (often PAN in lowercase + DOB):');
+          if (pwd === null) { setBadge(''); return; }
+        } else { throw e; }
+      }
+    }
+    let textAll = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      textAll += (reconstructTextWithCoordinates(tc) || tc.items.map(s => s.str).join(' ')) + '\n';
+    }
+    const r = parseForm16(textAll);
+    form16Parsed = r;
+    const fill = (id, v) => { if (v != null) { const el = document.getElementById(id); if (el) el.value = v; } };
+    fill('f16-employer', r.employer); fill('f16-tan', r.tan); fill('f16-ay', r.ay);
+    fill('f16-gross', r.gross); fill('f16-exempt', r.exemptU10); fill('f16-proftax', r.profTax);
+    fill('f16-80c', r.s80c); fill('f16-80ccd1b', r.s80ccd1b); fill('f16-80ccd2', r.s80ccd2);
+    fill('f16-80d', r.s80d); fill('f16-24b', r.s24b); fill('f16-tds', r.tds);
+    const found = ['gross','exemptU10','profTax','s80c','s80ccd1b','s80ccd2','s80d','s24b','tds'].filter(k => r[k] != null).length;
+    if (found >= 3) {
+      setBadge(`<span class="parse-status parse-ok">✓ Extracted ${found} fields — review &amp; correct below, then Save.</span>`);
+    } else {
+      setBadge(`<span class="parse-status" style="background:var(--surface2);color:var(--text2)">⚠ Could only read ${found} field(s). Form 16 layouts vary — please fill the rest manually.</span>`);
+    }
+  } catch (e) {
+    setBadge(`<span class="parse-status" style="background:var(--red-light);color:var(--red)">✗ ${esc(e.message || 'Could not read PDF')}. Enter values manually.</span>`);
+  }
+}
+
+function saveForm16() {
+  const m = getTaxMember();
+  if (!D.tax) D.tax = {};
+  const num = id => +(document.getElementById(id) || {}).value || 0;
+  const str = id => ((document.getElementById(id) || {}).value || '').trim();
+  D.tax[m] = Object.assign({}, D.tax[m] || {}, {
+    employer: str('f16-employer'), tan: str('f16-tan'), ay: str('f16-ay'),
+    gross: num('f16-gross'), exemptOther: num('f16-exempt'), hra: num('f16-hra'),
+    profTax: num('f16-proftax'), s80c: Math.min(num('f16-80c'), 150000),
+    s80ccd: Math.min(num('f16-80ccd1b'), 50000), s80ccd2: num('f16-80ccd2'),
+    s80d: Math.min(num('f16-80d'), 100000), s24b: Math.min(num('f16-24b'), 200000),
+    s80e: num('f16-80e'), s80g: num('f16-80g'), s80tta: Math.min(num('f16-80tta'), 10000),
+    tds: num('f16-tds')
+  });
+  save(); renderAll(); closeModal('form16Modal');
 }
 
 function saveTxn() {
@@ -1352,9 +1458,7 @@ function calcNW() {
   const goldVal = calcGoldValue();
   let npsTotal = 0;
   Object.values(D.nps).forEach(n => { npsTotal += (n.tier1||0) + (n.tier2||0); });
-  let epfTotal = 0;
-  Object.values(D.epf).forEach(e => { epfTotal += (e.balance||0); });
-  const ret = epfTotal + npsTotal + getGratuityValue();
+  const ret = D.epf.balance + npsTotal + getGratuityValue();
   const loanLiab = D.loans.reduce((s, l) => s + l.outstanding, 0);
   const cardLiab = D.cards.reduce((s, c) => s + c.outstanding, 0);
   return liq + inv + prop + goldVal + ret - loanLiab - cardLiab;
@@ -1379,9 +1483,7 @@ function snapshotNW() {
   const goldVal = filterByMember(D.gold).reduce((s, g) => s + g.weight * ((g.purity||22)/24) * (D.goldRate||7500), 0);
   const npsData = getNpsData();
   const npsTotal = npsData.tier1 + npsData.tier2;
-  let epfTotalSnap = 0;
-  Object.values(D.epf).forEach(e => { epfTotalSnap += (e.balance||0); });
-  const assetsVal = liq + propVal + inv + goldVal + epfTotalSnap + npsTotal + getGratuityValue();
+  const assetsVal = liq + propVal + inv + goldVal + D.epf.balance + npsTotal + getGratuityValue();
   const loanLiab = filterByMember(D.loans).reduce((s, l) => s + l.outstanding, 0);
   const cardLiab = filterByMember(D.cards).reduce((s, c) => s + c.outstanding, 0);
   const liabsVal = loanLiab + cardLiab;
@@ -1416,8 +1518,153 @@ function newTax(inc) {
 }
 
 // ─────────────────────────────────────────────
+// FORM 16 / CA-GRADE TAX ENGINE (FY 2025-26 · AY 2026-27)
+// ─────────────────────────────────────────────
+const OLD_SLABS = [[250000,500000,.05],[500000,1000000,.20],[1000000,Infinity,.30]];
+const NEW_SLABS = [[400000,800000,.05],[800000,1200000,.10],[1200000,1600000,.15],[1600000,2000000,.20],[2000000,2400000,.25],[2400000,Infinity,.30]];
+
+function slabTax(taxable, slabs) {
+  let t = 0;
+  slabs.forEach(([lo, hi, r]) => { if (taxable > lo) t += (Math.min(taxable, hi) - lo) * r; });
+  return t;
+}
+
+// Marginal slab rate (old regime) used to value deduction headroom in ₹ of tax saved.
+function marginalRateOld(taxable) {
+  if (taxable <= 250000) return 0;
+  if (taxable <= 500000) return 0.05;
+  if (taxable <= 1000000) return 0.20;
+  return 0.30;
+}
+
+// Full both-regime computation from a tax record. All fields optional & backward-compatible.
+function computeRegime(t) {
+  const n = x => Math.max(0, +x || 0);
+  const grossSalary = n(t.gross);                 // Gross Salary u/s 17(1)+(2)+(3)
+  const exemptHRA   = n(t.hra);                   // §10(13A) HRA exemption
+  const exemptOther = n(t.exemptOther);           // §10(5) LTA, etc.
+  const profTax     = Math.min(n(t.profTax), 2500);
+  // Chapter VI-A (old regime)
+  const c80c     = Math.min(n(t.s80c), 150000);
+  const c80ccd1b = Math.min(n(t.s80ccd), 50000);
+  const c80ccd2  = n(t.s80ccd2);                  // employer NPS §80CCD(2) — allowed in BOTH regimes
+  const c24b     = Math.min(n(t.s24b), 200000);
+  const c80d     = Math.min(n(t.s80d), 100000);
+  const c80e     = n(t.s80e);
+  const c80g     = n(t.s80g);
+  const c80tta   = Math.min(n(t.s80tta), 10000);
+  const tds      = n(t.tds);
+
+  // ── OLD REGIME ──
+  const oldStd      = grossSalary > 0 ? 50000 : 0;
+  const oldExempt   = exemptHRA + exemptOther;
+  const oldSalInc   = Math.max(0, grossSalary - oldExempt - oldStd - profTax);
+  const oldVIA      = c80c + c80ccd1b + c80ccd2 + c24b + c80d + c80e + c80g + c80tta;
+  const oldTaxable  = Math.max(0, oldSalInc - oldVIA);
+  let   oldBase     = slabTax(oldTaxable, OLD_SLABS);
+  const oldRebate   = oldTaxable <= 500000 ? oldBase : 0;        // §87A
+  const oldAfterReb = Math.max(0, oldBase - oldRebate);
+  const oldCess     = oldAfterReb * 0.04;
+  const oldTotal    = Math.round(oldAfterReb + oldCess);
+
+  // ── NEW REGIME ── most exemptions/deductions disallowed; only Std Ded ₹75k + §80CCD(2)
+  const newStd      = grossSalary > 0 ? 75000 : 0;
+  const newSalInc   = Math.max(0, grossSalary - newStd);
+  const newVIA      = c80ccd2;
+  const newTaxable  = Math.max(0, newSalInc - newVIA);
+  let   newBase     = slabTax(newTaxable, NEW_SLABS);
+  const newRebate   = newTaxable <= 1200000 ? newBase : 0;       // §87A (new regime, up to ₹12L)
+  const newAfterReb = Math.max(0, newBase - newRebate);
+  const newCess     = newAfterReb * 0.04;
+  const newTotal    = Math.round(newAfterReb + newCess);
+
+  return {
+    inputs: { grossSalary, exemptHRA, exemptOther, profTax, c80c, c80ccd1b, c80ccd2, c24b, c80d, c80e, c80g, c80tta, tds },
+    old: {
+      std: oldStd, exempt: oldExempt, salaryIncome: oldSalInc, totalDeductions: oldExempt + oldStd + profTax + oldVIA,
+      via: oldVIA, taxable: oldTaxable, base: Math.round(oldBase), rebate: Math.round(oldRebate),
+      cess: Math.round(oldCess), total: oldTotal, refund: tds - oldTotal, marginalRate: marginalRateOld(oldTaxable)
+    },
+    new: {
+      std: newStd, exempt: 0, salaryIncome: newSalInc, totalDeductions: newStd + newVIA,
+      via: newVIA, taxable: newTaxable, base: Math.round(newBase), rebate: Math.round(newRebate),
+      cess: Math.round(newCess), total: newTotal, refund: tds - newTotal
+    }
+  };
+}
+
+// Best regime + the human verdict.
+function bestRegime(A) {
+  return A.old.total <= A.new.total ? 'old' : 'new';
+}
+
+// ── Form 16 PDF text parser (best-effort; user reviews & corrects) ──
+function f16grab(text, patterns) {
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m && m[1] != null) {
+      const v = parseFloat(String(m[1]).replace(/,/g, ''));
+      if (!isNaN(v)) return Math.round(v);
+    }
+  }
+  return null;
+}
+const NUM = '([\\d,]+(?:\\.\\d+)?)';
+function parseForm16(text) {
+  const T = text.replace(/ /g, ' ');
+  const r = {};
+  r.gross      = f16grab(T, [new RegExp('Gross\\s+Salary[\\s\\S]{0,160}?Total[\\s\\S]{0,40}?' + NUM, 'i'),
+                             new RegExp('17\\(1\\)[\\s\\S]{0,80}?' + NUM, 'i'),
+                             new RegExp('Gross\\s+Salary[\\s\\S]{0,80}?' + NUM, 'i')]);
+  // Anchor on the literal "section 10" so the "10" token is consumed, not captured as the amount.
+  r.exemptU10  = f16grab(T, [new RegExp('exemption\\s+under\\s+section\\s+10[\\s\\S]{0,120}?Total[^\\d]{0,40}' + NUM, 'i'),
+                             new RegExp('amount\\s+of\\s+exemption\\s+under\\s+section\\s+10[^\\d]{0,40}' + NUM, 'i'),
+                             new RegExp('exemption\\s+under\\s+section\\s+10[^\\d]{0,40}' + NUM, 'i')]);
+  r.profTax    = f16grab(T, [new RegExp('section\\s+16\\(iii\\)[\\s\\S]{0,60}?' + NUM, 'i'),
+                             new RegExp('Tax\\s+on\\s+employment[\\s\\S]{0,60}?' + NUM, 'i'),
+                             new RegExp('Professional\\s+Tax[\\s\\S]{0,40}?' + NUM, 'i')]);
+  r.s80c       = f16grab(T, [new RegExp('80C[\\s\\S]{0,120}?Deductible\\s+amount[\\s\\S]{0,40}?' + NUM, 'i'),
+                             new RegExp('section\\s+80C\\b[\\s\\S]{0,80}?' + NUM, 'i')]);
+  r.s80ccd1b   = f16grab(T, [new RegExp('80CCD\\s*\\(?1B\\)?[\\s\\S]{0,80}?' + NUM, 'i')]);
+  r.s80ccd2    = f16grab(T, [new RegExp('80CCD\\s*\\(?2\\)?[\\s\\S]{0,80}?' + NUM, 'i')]);
+  r.s80d       = f16grab(T, [new RegExp('80D\\b[\\s\\S]{0,80}?' + NUM, 'i')]);
+  r.s24b       = f16grab(T, [new RegExp('(?:24\\(b\\)|Income\\s+from\\s+house\\s+property|interest\\s+on\\s+housing)[\\s\\S]{0,80}?-?\\s*' + NUM, 'i')]);
+  r.tds        = f16grab(T, [new RegExp('Total\\s+amount\\s+of\\s+tax\\s+deducted[\\s\\S]{0,60}?' + NUM, 'i'),
+                             new RegExp('Net\\s+tax\\s+payable[\\s\\S]{0,40}?' + NUM, 'i'),
+                             new RegExp('Tax\\s+deducted\\s+at\\s+source[\\s\\S]{0,60}?' + NUM, 'i')]);
+  const ay = T.match(/Assessment\s+Year[\s:]*([0-9]{4}\s*[-–]\s*[0-9]{2,4})/i);
+  r.ay = ay ? ay[1].replace(/\s/g, '') : null;
+  const emp = T.match(/Name\s+and\s+address\s+of\s+the\s+Employer[\s\S]{0,80}?\n?\s*([A-Z][A-Za-z0-9&.,'\- ]{3,60})/);
+  r.employer = emp ? emp[1].trim() : null;
+  const tan = T.match(/\b([A-Z]{4}[0-9]{5}[A-Z])\b/);
+  r.tan = tan ? tan[1] : null;
+  return r;
+}
+
+// ─────────────────────────────────────────────
 // RENDER ALL
 // ─────────────────────────────────────────────
+
+// Derive the display "base name" for an auto-detected loan from a transaction
+// description. Single source of truth shared by the detector and the delete path.
+function deriveEmiBaseName(desc) {
+  let base = desc || '';
+  if (base.includes('/')) {
+    const parts = base.split('/');
+    base = ['UPI','NEFT','IMPS','RTGS','BIL'].includes(parts[0]) ? (parts[1] || base) : parts[0];
+  }
+  return stripTags(base.trim()) || 'Auto-Detected Loan';
+}
+
+// Canonical dismissal key for the loan an EMI transaction would auto-create.
+// MUST match the key built in syncLoansFromTxns so a delete reliably tombstones it.
+function autoLoanKey(desc, amount) {
+  const amtNum = Number(amount);
+  const isAutoLoan = (!isNaN(amtNum) && Math.abs(amtNum - 23790) < 1);
+  const base = isAutoLoan ? 'Auto Loan' : deriveEmiBaseName(desc);
+  return base + '_' + amtNum;
+}
+
 function syncLoansFromTxns() {
   _log("Running syncLoansFromTxns...");
   _log("Current D.loans:", D.loans);
@@ -1483,12 +1730,7 @@ function syncLoansFromTxns() {
     if (/apple/i.test(r.desc) || /bajaj electronics/i.test(r.desc) || Math.abs(Number(r.amount) - 24999) < 1) return;
     if (r.cat === 'Family Transfer') return;
     if (r.cat === 'EMI' || /emi|loan|finance|bajaj|muthoot|cholamandalam|chola|hdb|home credit|ach debit|nach debit|ecs debit|auto debit|mandate/i.test(r.desc)) {
-      let base = r.desc || '';
-      if (base.includes('/')) {
-        const parts = base.split('/');
-        base = ['UPI','NEFT','IMPS','RTGS','BIL'].includes(parts[0]) ? (parts[1] || base) : parts[0];
-      }
-      base = stripTags(base.trim()) || 'Auto-Detected Loan';
+      const base = deriveEmiBaseName(r.desc);
       const key = base + '_' + r.amount;
       uniqueNewEmis[key] = { ...r, baseName: base };
     }
@@ -1499,17 +1741,26 @@ function syncLoansFromTxns() {
     const amtNum = Number(r.amount);
     const isAutoLoan = (!isNaN(amtNum) && Math.abs(amtNum - 23790) < 1);
     const baseName = isAutoLoan ? 'Auto Loan' : r.baseName;
+    const autoKey = autoLoanKey(r.desc, r.amount);
     _log(`Checking match for ${baseName} with EMI ${amtNum}`);
     const match = D.loans.find(l => {
+      // An auto-detected loan keeps its autoKey even after the user renames it or edits
+      // its EMI, so match on that first to avoid creating a duplicate from the same txn.
+      if (l.autoKey && l.autoKey === autoKey) return true;
       const loanEmi = Number(l.emi);
       const rowAmt = Number(r.amount);
       const emiMatch = Math.abs(loanEmi - rowAmt) < 10;
-      const nameMatch = l.name.toLowerCase().includes(baseName.toLowerCase()) || 
+      const nameMatch = l.name.toLowerCase().includes(baseName.toLowerCase()) ||
                           baseName.toLowerCase().includes(l.name.toLowerCase());
       _log(`Comparing with existing loan "${l.name}" (EMI: ${loanEmi}): emiMatch=${emiMatch}, nameMatch=${nameMatch}`);
       return emiMatch && nameMatch;
     });
-    if (!match) {
+    const dismissed = D.dismissedAutoLoans || [];
+    const isDismissed = dismissed.includes(autoKey)
+                     || dismissed.includes(baseName + '_' + amtNum)
+                     || dismissed.includes(baseName + '_' + r.amount)
+                     || dismissed.includes('amt:' + Math.round(amtNum));
+    if (!match && !isDismissed) {
       _log(`No match found! Auto-populating loan stub for "${baseName}" (${amtNum})`);
       D.loans.push({
         id: Date.now() + Math.random(),
@@ -1523,7 +1774,9 @@ function syncLoansFromTxns() {
         rate: 10,
         tenure: 24,
         emiDay: parseInt((r.date||'').split('-')[2], 10) || 1,
-        intPaid: 0
+        intPaid: 0,
+        autoDetected: true,
+        autoKey
       });
       changed = true;
     } else {
@@ -1576,10 +1829,7 @@ function renderOv() {
   const totalLiab = loanLiab + cardLiab;
   const npsData = getNpsData();
   const npsTotal = npsData.tier1 + npsData.tier2;
-  const epfBalance = currentMember === 'all'
-    ? Object.values(D.epf).reduce((s, e) => s + (e.balance||0), 0)
-    : (D.epf[currentMember] ? (D.epf[currentMember].balance || 0) : 0);
-  const epfGratuity = epfBalance + (currentMember === 'all' ? getGratuityValue() : 0);
+  const epfGratuity = currentMember === 'all' ? D.epf.balance + getGratuityValue() : 0;
   const nw = liq + propVal + inv + goldVal + epfGratuity + npsTotal - totalLiab;
 
   document.getElementById('ov-nw').textContent = fmt(nw);
@@ -1966,8 +2216,7 @@ function renderNWChart() {
 }
 
 function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
-  const epfForDoughnut = Object.values(D.epf).reduce((s, e) => s + (e.balance||0), 0);
-  const totalAssets = liq + propVal + inv + goldVal + epfForDoughnut + npsTotal + getGratuityValue();
+  const totalAssets = liq + propVal + inv + goldVal + D.epf.balance + npsTotal + getGratuityValue();
   const assetEl = document.getElementById('ov-assets-breakdown');
   const canvas = document.getElementById('assetDoughnutCanvas');
   
@@ -1985,7 +2234,7 @@ function renderAssetsDoughnut(liq, propVal, inv, goldVal, npsTotal) {
   
   const ctx = canvas.getContext('2d');
   
-  const epfNps = epfForDoughnut + npsTotal + getGratuityValue();
+  const epfNps = D.epf.balance + npsTotal + getGratuityValue();
   const innerGroups = [liq + inv + goldVal, propVal, epfNps];
   const outerClasses = [liq, inv, goldVal, propVal, epfNps];
 
@@ -2078,11 +2327,11 @@ function renderAlerts() {
   if (t.gross > 0 && t.s80c < 150000) alerts.push({type:'info', msg:`Section 80C: ${fmt(150000-t.s80c)} headroom remaining.`});
   const npsData = getNpsData();
   if (npsData.fyContrib < 50000 && t.gross > 0) alerts.push({type:'info', msg:`NPS 80CCD(1B): ${fmt(50000-npsData.fyContrib)} unused — worth ${fmt((50000-npsData.fyContrib)*.312)} in tax savings.`});
-  filterByMember(D.insurance).filter(p => { const d=daysUntil(p.dueDate); return d!==null&&d<=30; }).forEach(p => {
+  D.insurance.filter(p => { const d=daysUntil(p.dueDate); return d!==null&&d<=30; }).forEach(p => {
     const d = daysUntil(p.dueDate);
     alerts.push({type:d<=0?'danger':'warn', msg:`${esc(p.name)} premium ${d<=0?'OVERDUE':'due in '+d+' days'} — ${fmt(p.premium)}`});
   });
-  filterByMember(D.properties).filter(p => { const d=daysUntil(p.propTaxDue); return d!==null&&d<=30&&d>0; }).forEach(p => {
+  D.properties.filter(p => { const d=daysUntil(p.propTaxDue); return d!==null&&d<=30&&d>0; }).forEach(p => {
     alerts.push({type:'warn', msg:`Property tax for ${esc(p.name)} due in ${daysUntil(p.propTaxDue)} days — ${fmt(p.propTax)}`});
   });
   const el = document.getElementById('ov-alerts');
@@ -2177,7 +2426,7 @@ function renderCards() {
 // ─────────────────────────────────────────────
 function renderRewards() {
   migrateRewards();
-  const list = filterByMember(D.rewards);
+  const list = D.rewards;
   const now = new Date();
   const totalVal = list.reduce((s, r) => s + r.points * r.rate, 0);
   const expiringSoon = list.filter(r => {
@@ -2672,7 +2921,7 @@ function renderInv() {
 // EPF
 // ─────────────────────────────────────────────
 function renderEPF() {
-  const e = getEpfData();
+  const e = D.epf;
   document.getElementById('epf-bal-display').textContent = fmt(e.balance);
   document.getElementById('epf-monthly-display').textContent = fmt(e.monthly);
   document.getElementById('epf-uan-d').textContent = e.uan || '—';
@@ -2720,9 +2969,6 @@ function renderEPF() {
   // Retirement Projection
   const projEl = document.getElementById('epf-projection-body');
   if (projEl) {
-    if (currentMember === 'all') {
-      projEl.innerHTML = '<div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Select a specific family member to see their EPF retirement projection.</span></div>';
-    } else {
     const birthYear = e.birthYear || 0;
     const retireAge = e.retireAge || 60;
     if (!birthYear) {
@@ -2761,7 +3007,6 @@ function renderEPF() {
         </div>
         <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Projection assumes current balance of ${fmt(P)} + ${fmt(C)}/mo contributions compounding at 8.25% p.a. Does not account for future salary increments.</span></div>`;
     }
-    } // end else (specific member)
   }
 }
 
@@ -2775,16 +3020,6 @@ function getNpsData() {
     return { pran:Object.keys(D.nps).length > 1 ? 'Multiple' : (Object.values(D.nps)[0]?.pran || ''), tier1:t1, tier2:t2, fyContrib:fyc, monthly:mo, equityPct:'-' };
   }
   return D.nps[currentMember] || {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
-}
-
-const EPF_EMPTY = {uan:'', balance:0, empShare:0, erShare:0, monthly:0, updated:null, birthYear:0, retireAge:60};
-function getEpfData() {
-  if (currentMember === 'all') {
-    let bal=0, emp=0, er=0, mo=0;
-    Object.values(D.epf).forEach(e => { bal+=(e.balance||0); emp+=(e.empShare||0); er+=(e.erShare||0); mo+=(e.monthly||0); });
-    return Object.assign({}, EPF_EMPTY, { balance:bal, empShare:emp, erShare:er, monthly:mo });
-  }
-  return D.epf[currentMember] || Object.assign({}, EPF_EMPTY);
 }
 
 function renderNPS() {
@@ -3136,6 +3371,7 @@ function renderLoans() {
         <div class="loan-card-header">
           <div>
             <span class="loan-type ${typeClasses[l.type]}">${typeLabels[l.type]||l.type}</span>
+            ${l.autoDetected ? `<span style="font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;margin-left:5px">auto-detected</span>` : ''}
             <div style="font-size:14px;font-weight:500;margin-top:5px">${esc(l.name)} ${memberTag(l.member)}</div>
             <div style="font-size:11px;color:var(--muted)">${esc(l.lender||'')}</div>
           </div>
@@ -3186,7 +3422,7 @@ function renderLoans() {
   }
 
   // 24b home loan deduction
-  const homeLoanInt = filterByMember(D.loans).filter(l=>l.type==='home').reduce((s,l)=>s+l.intPaid,0);
+  const homeLoanInt = D.loans.filter(l=>l.type==='home').reduce((s,l)=>s+l.intPaid,0);
   const capped = Math.min(homeLoanInt, 200000);
   document.getElementById('loan-24b-val').textContent = fmt(capped);
   document.getElementById('loan-24b-pct').textContent = pf(homeLoanInt,200000) + '%';
@@ -3522,10 +3758,12 @@ function renderBudget() {
 // ─────────────────────────────────────────────
 function renderTax() {
   const t = currentTax();
-  const totalDed = t.s80c + t.s80ccd + t.s24b + t.s80d + t.hra + 75000;
-  const taxable = Math.max(0, t.gross - totalDed);
-  const ot = oldTax(taxable), nt = newTax(t.gross);
+  const A = computeRegime(t);
+  const totalDed = A.old.totalDeductions;
+  const taxable = A.old.taxable;
+  const ot = A.old.total, nt = A.new.total;
   const saving = nt - ot;
+  renderForm16Analysis(t, A);
   document.getElementById('tax-gross-d').textContent = fmt(t.gross);
   document.getElementById('tax-ded-d').textContent = fmt(totalDed);
   document.getElementById('tax-txbl-d').textContent = fmt(taxable);
@@ -3566,7 +3804,7 @@ function renderTax() {
       const ctx = taxCanvas.getContext('2d');
       ctx.clearRect(0, 0, taxCanvas.width, taxCanvas.height);
     } else {
-      const ntTaxable = Math.max(0, t.gross - 75000);
+      const ntTaxable = A.new.taxable;
       const ctx = taxCanvas.getContext('2d');
       taxChartInstance = new Chart(ctx, {
         type: 'bar',
@@ -3658,7 +3896,7 @@ function renderTax() {
   const equityTypes = new Set(['Mutual Fund', 'Stock', 'ESOP', 'RSU']);
   const now = new Date();
   let ltcgGain = 0, stcgGain = 0, debtGain = 0, noDatesCount = 0;
-  filterByMember(D.investments).forEach(inv => {
+  D.investments.forEach(inv => {
     const pnl = (inv.value || 0) - (inv.cost || 0);
     if (pnl <= 0) return;
     const dateStr = isEsopType(inv.type) ? inv.grantDate : inv.purchaseDate;
@@ -3704,6 +3942,134 @@ function renderTax() {
         <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Equity LTCG (held &gt;12 months): 12.5% above ₹1.25L exemption. Equity STCG (≤12 months): 20%. Per Finance Act 2024.</span></div>`;
     }
   }
+}
+
+// ── Form 16 — CA-style computation sheet + actionable insights ──
+function renderForm16Analysis(t, A) {
+  const sheetEl = document.getElementById('tax-ca-sheet');
+  const insEl   = document.getElementById('tax-ca-insights');
+  if (!sheetEl || !insEl) return;
+
+  if (!t.gross) {
+    sheetEl.innerHTML = `<div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Upload your <strong>Form 16</strong> (or enter figures) to generate a CA-style computation of income, tax liability for both regimes, and your refund or balance payable.</span></div>`;
+    insEl.innerHTML = '';
+    return;
+  }
+
+  const best = bestRegime(A);
+  const meta = [t.employer, t.tan ? 'TAN '+t.tan : '', t.ay ? 'AY '+t.ay : ''].filter(Boolean).join('  ·  ');
+
+  // signed currency for refund/payable
+  const sgn = v => (v >= 0 ? '+' : '−') + fmt(Math.abs(v));
+
+  const line = (label, oldV, newV, opts = {}) => {
+    const { neg, bold, hd } = opts;
+    const w = bold ? 'font-weight:600' : '';
+    const ov = oldV === '' ? '' : (neg && oldV ? '− ' : '') + fmt(oldV);
+    const nv = newV === '' ? '' : (neg && newV ? '− ' : '') + fmt(newV);
+    return `<div class="tax-row" style="${hd ? 'border-top:1px solid var(--border);margin-top:4px;padding-top:8px;' : ''}">
+      <span class="tax-key" style="${w}">${esc(label)}</span>
+      <span style="display:inline-flex;gap:18px;font-family:'DM Mono',monospace;font-size:12px">
+        <span style="min-width:90px;text-align:right;${w}">${ov}</span>
+        <span style="min-width:90px;text-align:right;${w}">${nv}</span>
+      </span></div>`;
+  };
+
+  const refundRow = (label, oldV, newV) => {
+    const cell = v => `<span style="min-width:90px;text-align:right;font-weight:700;color:${v >= 0 ? 'var(--green)' : 'var(--red)'}">${sgn(v)}</span>`;
+    return `<div class="tax-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px">
+      <span class="tax-key" style="font-weight:600">${esc(label)}</span>
+      <span style="display:inline-flex;gap:18px;font-family:'DM Mono',monospace;font-size:12px">${cell(oldV)}${cell(newV)}</span></div>`;
+  };
+
+  sheetEl.innerHTML = `
+    ${meta ? `<div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:10px">${esc(meta)}</div>` : ''}
+    <div class="tax-row" style="border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:4px">
+      <span class="tax-key" style="font-weight:600">Computation of Income</span>
+      <span style="display:inline-flex;gap:18px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">
+        <span style="min-width:90px;text-align:right">Old ${best==='old'?'★':''}</span>
+        <span style="min-width:90px;text-align:right">New ${best==='new'?'★':''}</span>
+      </span></div>
+    ${line('Gross Salary u/s 17', A.inputs.grossSalary, A.inputs.grossSalary)}
+    ${line('Less: Exempt allowances u/s 10', A.old.exempt, A.new.exempt, {neg:true})}
+    ${line('Less: Standard Deduction §16(ia)', A.old.std, A.new.std, {neg:true})}
+    ${line('Less: Professional Tax §16(iii)', A.inputs.profTax, 0, {neg:true})}
+    ${line('Income from Salary', A.old.salaryIncome, A.new.salaryIncome, {bold:true, hd:true})}
+    ${line('Less: Chapter VI-A Deductions', A.old.via, A.new.via, {neg:true})}
+    ${line('Total Taxable Income', A.old.taxable, A.new.taxable, {bold:true, hd:true})}
+    ${line('Tax on Income', A.old.base, A.new.base)}
+    ${line('Less: §87A Rebate', A.old.rebate, A.new.rebate, {neg:true})}
+    ${line('Add: Health &amp; Edu Cess 4%', A.old.cess, A.new.cess)}
+    ${line('Total Tax Liability', A.old.total, A.new.total, {bold:true, hd:true})}
+    ${line('Less: TDS by Employer', A.inputs.tds, A.inputs.tds, {neg:true})}
+    ${refundRow('Refund (+) / Payable (−)', A.old.refund, A.new.refund)}
+    <div style="font-size:10px;color:var(--muted);margin-top:10px;font-family:'DM Mono',monospace">FY 2025-26 · AY 2026-27. ★ = lower-tax regime. Figures for guidance — verify against 26AS / AIS.</div>`;
+
+  // ── Insights ──
+  const ins = [];
+  const push = (sev, html) => ins.push({ sev, html });
+  const taxSaving = Math.abs(A.old.total - A.new.total);
+  const bestObj = A[best];
+
+  // 1. Regime recommendation
+  if (taxSaving > 0) {
+    push('success', `<strong>${best === 'old' ? 'Old' : 'New'} Regime is cheaper by ${fmt(taxSaving)}.</strong> Tell your employer / select it while filing. ${best === 'new' ? 'New regime is the default — no action needed if you do nothing.' : 'You must actively opt for the old regime.'}`);
+  } else {
+    push('info', `Both regimes give the same tax (${fmt(A.old.total)}). New regime is simpler — fewer documents to retain.`);
+  }
+
+  // 2. Refund / payable for best regime
+  if (A.inputs.tds > 0 || bestObj.total > 0) {
+    if (bestObj.refund > 1000) {
+      push('success', `<strong>Expected refund of ${fmt(bestObj.refund)}</strong> under the ${best} regime — employer withheld more TDS than your liability. File early to get it sooner.`);
+    } else if (bestObj.refund < -1000) {
+      push('warn', `<strong>Balance tax payable: ${fmt(Math.abs(bestObj.refund))}</strong> under the ${best} regime. Pay self-assessment tax (Challan 280) before filing to avoid §234B/234C interest.`);
+    } else {
+      push('info', `TDS closely matches your liability — no material refund or balance due under the ${best} regime.`);
+    }
+  }
+
+  // 3. 80C headroom (old regime relevance)
+  const c80c = A.inputs.c80c, mr = A.old.marginalRate;
+  if (best === 'old' && c80c < 150000) {
+    const gap = 150000 - c80c;
+    push('info', `<strong>§80C headroom: ${fmt(gap)}.</strong> Investing this (ELSS, PPF, EPF, life insurance, principal repayment) saves ≈ ${fmt(Math.round(gap * mr * 1.04))} in tax at your ${Math.round(mr*100)}% slab.`);
+  }
+
+  // 4. 80CCD(1B) NPS
+  if (best === 'old' && A.inputs.c80ccd1b < 50000) {
+    const gap = 50000 - A.inputs.c80ccd1b;
+    push('info', `<strong>§80CCD(1B) NPS: ${fmt(gap)} unused.</strong> An extra NPS contribution here saves ≈ ${fmt(Math.round(gap * mr * 1.04))} — over and above the ₹1.5L 80C limit.`);
+  }
+
+  // 5. 80D medical insurance
+  if (best === 'old' && A.inputs.c80d === 0) {
+    push('info', `<strong>§80D not claimed.</strong> Health-insurance premium is deductible up to ₹25,000 (self/family) + ₹50,000 (senior-citizen parents).`);
+  }
+
+  // 6. HRA
+  if (best === 'old' && A.inputs.grossSalary > 0 && A.old.exempt === 0) {
+    push('info', `No HRA / §10 exemption recorded. If you pay rent, claim HRA exemption — often one of the largest salaried deductions.`);
+  }
+
+  // 7. §87A proximity (new regime)
+  if (best === 'new' && A.new.taxable > 1200000 && A.new.taxable <= 1280000) {
+    push('warn', `Your taxable income (${fmt(A.new.taxable)}) is just over the ₹12L §87A rebate ceiling. A small §80CCD(2) employer-NPS contribution could pull you under and wipe out the tax.`);
+  }
+
+  // 8. TDS missing
+  if (A.inputs.grossSalary > 0 && A.inputs.tds === 0) {
+    push('warn', `No TDS entered. Cross-check Part A of Form 16 and your <strong>26AS / AIS</strong> on the income-tax portal before filing.`);
+  }
+
+  // 9. Deadline + cross-check (always)
+  push('info', `<strong>Filing deadline: 31 July 2026</strong> for AY 2026-27 (non-audit). Reconcile salary, interest & capital-gains against <strong>AIS/TIS</strong> before submitting.`);
+
+  const cls = { success: 'alert-success', warn: 'alert-warn', info: 'alert-info' };
+  const ico = { success: '✓', warn: '⚡', info: 'ℹ' };
+  insEl.innerHTML = ins.map(i =>
+    `<div class="alert ${cls[i.sev]}" style="margin:0 0 8px"><span>${ico[i.sev]}</span><span>${i.html}</span></div>`
+  ).join('');
 }
 
 // ─────────────────────────────────────────────
@@ -3792,7 +4158,7 @@ function resetTxnFilters() {
 
 function renderWidgets() {
   if (!document.getElementById('w-salary')) return;
-  const txns = filterByMember(D.transactions);
+  const txns = D.transactions;
   const now = new Date();
   const cm = now.getMonth(), cy = now.getFullYear();
   const pm = cm===0?11:cm-1, py = cm===0?cy-1:cy;
@@ -3849,7 +4215,7 @@ function renderWidgets() {
     <div class="widget-chip ${vel>=0?'wchip-up':'wchip-down'}">${vel>=0?'&#8593; Growing':'&#8595; Shrinking'}</div>`;
 
   // 5. TAX HARVEST INTELLIGENCE
-  const investGains = filterByMember(D.investments).reduce((s,i)=>s+(i.value-i.cost),0);
+  const investGains = D.investments.reduce((s,i)=>s+(i.value-i.cost),0);
   const harvestRoom = Math.max(0,100000-Math.max(0,investGains));
   const npsDataW = getNpsData();
   const npsRoom = Math.max(0,50000-(npsDataW.fyContrib||0));
@@ -3862,9 +4228,8 @@ function renderWidgets() {
     ${s80cLeft>0?`<div class="widget-chip wchip-neutral" style="margin-left:4px">80C: ${fmt(s80cLeft)} left</div>`:''}`;
 
   // 6. CREDIT CARD OPTIMISATION SCORE
-  const memberCards = filterByMember(D.cards);
-  const totLim = memberCards.reduce((s,c)=>s+c.limit,0);
-  const totOut = memberCards.reduce((s,c)=>s+c.outstanding,0);
+  const totLim = D.cards.reduce((s,c)=>s+c.limit,0);
+  const totOut = D.cards.reduce((s,c)=>s+c.outstanding,0);
   const utilPct = totLim?Math.round(totOut/totLim*100):0;
   const score = Math.max(0,Math.min(100,100-utilPct*1.5));
   const scColor = score>=75?'var(--green)':score>=50?'var(--accent)':'var(--red)';
@@ -3875,16 +4240,15 @@ function renderWidgets() {
     <div class="widget-sub">Utilization ${utilPct}% &middot; ${fmt(Math.max(0,totLim-totOut))} available</div>`;
 
   // 7. DEBT PAYDOWN VISUALISER
-  const memberLoans = filterByMember(D.loans);
-  const totDebt = memberLoans.reduce((s,l)=>s+l.outstanding,0);
-  const totPrinc = memberLoans.reduce((s,l)=>s+l.principal,0);
+  const totDebt = D.loans.reduce((s,l)=>s+l.outstanding,0);
+  const totPrinc = D.loans.reduce((s,l)=>s+l.principal,0);
   const paidPct = totPrinc?Math.round((1-totDebt/totPrinc)*100):0;
-  const totEMI  = memberLoans.reduce((s,l)=>s+l.emi,0);
+  const totEMI  = D.loans.reduce((s,l)=>s+l.emi,0);
   document.getElementById('w-debt-paydown').innerHTML = `
     <div class="widget-label">&#x1F3AF; Debt Paydown</div>
     <div class="widget-value" style="color:var(--red)">${fmt(totDebt)}</div>
     <div class="widget-bar-row"><div class="widget-bar-bg"><div class="widget-bar-fill" style="width:${paidPct}%;background:var(--green)"></div></div><span style="font-size:10px;color:var(--muted);margin-left:4px">${paidPct}% paid</span></div>
-    <div class="widget-sub">EMI: ${fmt(totEMI)}/mo &middot; ${memberLoans.length} loan(s)</div>`;
+    <div class="widget-sub">EMI: ${fmt(totEMI)}/mo &middot; ${D.loans.length} loan(s)</div>`;
 
   // 8. LIFESTYLE INFLATION DETECTOR
   const skip = ['Salary','Investment','EMI'];
@@ -3902,7 +4266,7 @@ function renderWidgets() {
 function openSalaryHistory() {
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const now = new Date();
-  const salTxns = filterByMember(D.transactions).filter(t =>
+  const salTxns = D.transactions.filter(t =>
     t.type === 'credit' && (t.cat === 'Salary' || /salary|salaries|neft.*cr|salary.*credit|inward.*salary/i.test(t.desc || ''))
   );
 
@@ -4104,66 +4468,13 @@ function extractCardMetadata(text, bankType) {
   if (bankType === 'icici-cc') {
     name = "ICICI Credit Card";
   } else if (bankType === 'amex') {
-    // Extract card product name (e.g. "American Express Platinum Reserve Credit Card")
-    const cnMatch = text.match(/American Express[®\s\w™℠]*?Credit Card/i);
-    name = cnMatch ? cnMatch[0].replace(/[®℠™]/g,'').replace(/\s+/g,' ').trim() : 'American Express';
-
-    // OUTSTANDING: balance formula row "open [–/-] credits + debits = CLOSING [mindue]"
-    // [–\-−] covers en-dash (–), ASCII hyphen (-), and Unicode minus sign (−)
-    const balM = cleanText.match(/([\d,]+\.\d{2})\s*[–\-−]\s*([\d,]+\.\d{2})\s*\+\s*([\d,]+\.\d{2})\s*=\s*([\d,]+\.\d{2})(?:\s+([\d,]+\.\d{2}))?/);
-    if (balM) {
-      outstanding = parseFloat(balM[4].replace(/,/g,''));
-      if (balM[5]) minDue = parseFloat(balM[5].replace(/,/g,''));
-    }
-
-    // MIN DUE + DUE DATE: "receiving your payment of Rs. 20,896.12 by 15/06/2026"
-    const payM = cleanText.match(/payment\s+of\s+Rs\.?\s*([\d,]+\.\d{2})\s+by\s+(\d{2}\/\d{2}\/\d{4})/i);
-    if (payM) {
-      if (!minDue) minDue = parseFloat(payM[1].replace(/,/g,''));
-      dueDate = parseDate(payM[2], 'DD/MM/YYYY') || '';
-    }
-
-    // CREDIT LIMIT: statement has a two-row table:
-    //   Header line:  "Credit Limit Rs  Available Credit Limit Rs"
-    //   Values line:  "At May 23, 2026  480,000.00  318,809.32"
-    // Use the multi-line text to find the header line, then take the FIRST decimal
-    // number from the NEXT line.  cleanText collapses rows together and any regex
-    // that allows non-digit chars ends up capturing "23" from "May 23," instead.
-    const textLines = text.split('\n');
-    for (let li = 0; li < textLines.length - 1; li++) {
-      if (/Credit Limit Rs/i.test(textLines[li]) && /Available Credit Limit Rs/i.test(textLines[li])) {
-        const valNums = [...textLines[li + 1].matchAll(/[\d,]+\.\d{2}/g)];
-        if (valNums.length > 0) { limit = parseFloat(valNums[0][0].replace(/,/g,'')); break; }
-      }
-    }
-    // Fallback: find first monetary decimal after "Credit Limit" that is plausibly a limit (>= 10000)
-    if (limit === 0) {
-      const limFb = [...cleanText.matchAll(/Credit Limit[^]*?(\d[\d,]*\.\d{2})/gi)];
-      for (const m of limFb) {
-        const v = parseFloat(m[1].replace(/,/g,''));
-        if (v >= 10000) { limit = v; break; }
-      }
-    }
-
-    // Fallback: closing balance from "= amount mindue" when formula match fails
-    if (outstanding === 0) {
-      const eqM = cleanText.match(/=\s*([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/);
-      if (eqM) outstanding = parseFloat(eqM[1].replace(/,/g,''));
-    }
-    if (limit === 0) limit = 150000;
-    if (minDue === 0 && outstanding > 0) minDue = Math.round(outstanding * 0.05);
-
-    // Return early — bypass generic patterns which would corrupt correct Amex values.
-    // The generic duePattern matches the statement date (23/05/2026) before the due date (15/06/2026),
-    // and generic outPatterns match "payment due" in "Min Payment Due Rs" giving the opening balance.
-    return { name, outstanding, limit, dueDate, minDue };
+    name = "American Express Card";
   } else if (bankType === 'sc') {
     name = "Standard Chartered Card";
   } else {
     name = "Credit Card";
   }
-
-  // Generic fallback patterns (run for non-Amex or when Amex-specific didn't find values)
+  
   const outPatterns = [
     /(?:total\s+amount\s+due|total\s+due|amount\s+due|outstanding\s+balance|total\s+outstanding)\D*?([\d,]+\.\d{2})/i,
     /(?:payment\s+due|due\s+amount)\D*?([\d,]+\.\d{2})/i
@@ -4281,70 +4592,6 @@ function parseBankStatementPdf(text, bankType) {
   const lines = text.split('\n');
   const txns = [];
 
-  // ── AMEX PDF: dates use "May 03" / "May 9" (MMM D, no year) ──────────────────
-  if (bankType === 'amex') {
-    const amexDateReg = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\b/i;
-    const MON = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-    // Infer year from any 4-digit year in the statement text
-    const yrM = text.match(/\b(20\d{2})\b/);
-    const yr = yrM ? +yrM[1] : new Date().getFullYear();
-
-    // Lines to skip: section headers, summaries, footnotes, metadata
-    const skipReg = /^(total\s+of|new\s+domestic|summary\b|card\s+number|page\s+\d|\d+\s+of\s+\d+|prepared\s+for|statement\s+(period|date)|credit\s+summary|current\s+rates|details\b|foreign\s+spending|amount\s+rs|installment\s+plan\s+(summary|transactions)|other\s+account\s+transactions|payment\s+(information|methods|faq|advice)|national\s+electronic|payee|ifsc|drop\s+box|upi\b|permanent\s+account|gstin\b|category:|grievances|nodal\s+officer|banking\s+ombudsman|making\s+only|note:|sample\s+interest|insurance\s+cover|coverages\b|disclaimer\b|mitc\b|date\s+of\s+activation|nac\s+terms|contact\s+details|email|icici\s+lombard|please\b|opening\s+balance|cardmember\s+offer|we\s+have\s+made|missing\s+payment|procedure\s+to\s+be|annual\s+fee|interest\s+free|for\s+further|telephone|address:|head\s+of\s+customer|incorporated\s+with|minimum\s+payment\s+due$|minimum\s+payment\s+every|statement\s+includes|making\s+only|due\s+date|send\s+payment)/i;
-
-    let i = 0;
-    while (i < lines.length) {
-      const raw = lines[i].trim();
-      i++;
-      if (!raw || skipReg.test(raw)) continue;
-
-      const dm = raw.match(amexDateReg);
-      if (!dm) continue;
-
-      const mon = MON[dm[1].toLowerCase()];
-      const day = +dm[2];
-      const date = `${yr}-${String(mon+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-
-      // Everything after the date token on this line
-      const rest = raw.substring(dm[0].length).trim();
-
-      // CR already on this line?
-      let isCR = /\bCR\s*$/i.test(rest);
-
-      // Peek at the following lines for the CR marker
-      while (!isCR && i < lines.length) {
-        const peek = lines[i].trim();
-        if (/^CR\s*$/i.test(peek)) { isCR = true; i++; break; }
-        if (/^Card Number/i.test(peek)) {
-          if (/\bCR\b/i.test(peek)) isCR = true;
-          i++; // consume "Card Number…" line then keep peeking
-          continue;
-        }
-        break; // unrelated line → stop peeking
-      }
-
-      // Amount: last decimal number on the rest-of-line
-      const amtMatches = [...rest.matchAll(/[\d,]+\.\d{2}/g)];
-      if (!amtMatches.length) continue;
-      const amount = parseFloat(amtMatches[amtMatches.length-1][0].replace(/,/g,''));
-
-      // Description: text before the first number
-      const firstNumIdx = rest.search(/[\d,]+\.\d{2}/);
-      let desc = (firstNumIdx > 0 ? rest.substring(0, firstNumIdx) : rest)
-        .replace(/\bCR\s*$/i,'').replace(/\t/g,' ').trim();
-      desc = desc.replace(/^[\s\-,|\/\t]+/,'').replace(/[\s\-,|\/\t]+$/,'');
-      if (!desc || desc.length < 2) desc = 'Transaction';
-
-      const type = (isCR || /payment|refund|reversal|cashback/i.test(desc)) ? 'credit' : 'debit';
-
-      if (amount > 0) {
-        txns.push({ date, desc, amount, type, cat: autoCategory(desc, amount) });
-      }
-    }
-    return txns;
-  }
-
-  // ── Generic parser (ICICI Savings, ICICI CC, SC) ──────────────────────────────
   // Matches DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY AND DD MMM YYYY (e.g. "05 Jun 2026")
   const dateReg = /\b(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4}|\d{2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4})\b/i;
   // Finds all monetary amounts: optional ₹, digits with commas, mandatory 2-decimal
@@ -4973,13 +5220,9 @@ async function parseCSV(event) {
 }
 
 function confirmImport() {
-  const m = currentMember === 'all' ? 'madhu' : currentMember;
-  let txnAccountId = '';
-  let cardUpdated = false;
-
-  // ── NPS: no metadata to update, just needs parsedRows ──────────────────────
+  if (!parsedRows.length) return;
   if (selectedBank === 'nps') {
-    if (!parsedRows.length) return;
+    const m = currentMember === 'all' ? 'madhu' : currentMember;
     if (!D.nps[m]) D.nps[m] = {pran:'', tier1:0, tier2:0, fyContrib:0, monthly:0, equityPct:75};
     const data = parsedRows[0];
     if (data.pran) D.nps[m].pran = data.pran;
@@ -4987,47 +5230,47 @@ function confirmImport() {
     if (data.tier2) D.nps[m].tier2 = data.tier2;
     snapshotNW(); save(); renderAll();
     document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">✓ Updated NPS Holdings</span>`;
-    document.getElementById('importConfirmBtn').textContent = 'Done ✓';
+    document.getElementById('importConfirmBtn').textContent = 'Done ✓'; 
     document.getElementById('importConfirmBtn').disabled = true;
     parsedRows = [];
     return;
   }
+  const cfg = BANK_CONFIGS[selectedBank];
+  const m = currentMember === 'all' ? 'madhu' : currentMember;
+  let txnAccountId = '';
 
-  // ── Bank account: find or create savings account ────────────────────────────
   if (selectedBank === 'icici-salary' || selectedBank === 'sc') {
     const bankName = selectedBank === 'icici-salary' ? 'ICICI Savings' : 'SC Savings';
     const bankKeyword = selectedBank === 'icici-salary' ? 'icici' : 'standard chartered';
     let existingAcc = D.accounts.find(a => a.member === m && a.name.toLowerCase().includes(bankKeyword));
     if (!existingAcc) {
       existingAcc = {
-        id: Date.now() + Math.random(), name: bankName, member: m, type: 'savings',
-        balance: 0, credits: 0, debits: 0, updated: todayStr()
+        id: Date.now() + Math.random(),
+        name: bankName,
+        member: m,
+        type: 'savings',
+        balance: 0,
+        credits: 0,
+        debits: 0,
+        updated: todayStr()
       };
       D.accounts.push(existingAcc);
     }
     txnAccountId = existingAcc.id;
-  }
-
-  // ── Credit card: update metadata FIRST, regardless of how many transactions ─
-  // This runs even when parsedRows is empty so that outstanding/limit/dueDate/minDue
-  // are always refreshed the moment the user clicks Import (not silently skipped).
-  else if (selectedBank === 'icici-cc' || selectedBank === 'amex') {
+  } else if (selectedBank === 'icici-cc' || selectedBank === 'amex') {
     if (detectedCardData) {
-      // Bidirectional name match so "American Express" ↔ "American Express Platinum Reserve Credit Card"
-      // both resolve to the same existing card instead of creating a duplicate.
-      let existingCard = D.cards.find(c => c.member === m && (
-        c.name.toLowerCase().includes(detectedCardData.name.toLowerCase()) ||
-        detectedCardData.name.toLowerCase().includes(c.name.toLowerCase())
-      ));
+      let existingCard = D.cards.find(c => c.member === m && c.name.toLowerCase().includes(detectedCardData.name.toLowerCase()));
       if (existingCard) {
-        if (detectedCardData.outstanding > 0) existingCard.outstanding = detectedCardData.outstanding;
+        existingCard.outstanding = detectedCardData.outstanding;
         if (detectedCardData.limit > 0) existingCard.limit = detectedCardData.limit;
         if (detectedCardData.dueDate) existingCard.dueDate = detectedCardData.dueDate;
         if (detectedCardData.minDue > 0) existingCard.minDue = detectedCardData.minDue;
         txnAccountId = existingCard.id;
       } else {
         const newCard = {
-          id: Date.now() + Math.random(), name: detectedCardData.name, member: m,
+          id: Date.now() + Math.random(),
+          name: detectedCardData.name,
+          member: m,
           outstanding: detectedCardData.outstanding,
           limit: detectedCardData.limit || 150000,
           dueDate: detectedCardData.dueDate || '',
@@ -5036,15 +5279,19 @@ function confirmImport() {
         D.cards.push(newCard);
         txnAccountId = newCard.id;
       }
-      cardUpdated = true;
-      detectedCardData = null;
+      detectedCardData = null; // Clear state
     } else {
       const defaultName = selectedBank === 'icici-cc' ? 'ICICI Credit Card' : 'American Express';
       let existingCard = D.cards.find(c => c.member === m && c.name.toLowerCase().includes(defaultName.toLowerCase()));
       if (!existingCard) {
         existingCard = {
-          id: Date.now() + Math.random(), name: defaultName, member: m,
-          outstanding: 0, limit: 150000, dueDate: '', minDue: 0
+          id: Date.now() + Math.random(),
+          name: defaultName,
+          member: m,
+          outstanding: 0,
+          limit: 150000,
+          dueDate: '',
+          minDue: 0
         };
         D.cards.push(existingCard);
       }
@@ -5052,52 +5299,33 @@ function confirmImport() {
     }
   }
 
-  // ── No transactions to import ───────────────────────────────────────────────
-  if (!parsedRows.length) {
-    const noTxnMsg = cardUpdated
-      ? '✓ Card details updated · No transactions found in statement'
-      : 'No data to import';
-    const noTxnOk = cardUpdated;
-    if (cardUpdated) { snapshotNW(); save(); }
-    document.getElementById('parse-status-badge').innerHTML =
-      `<span class="parse-status${noTxnOk ? ' parse-ok' : ''}" ${noTxnOk ? '' : 'style="background:var(--red-light);color:var(--red)"'}>${noTxnMsg}</span>`;
-    document.getElementById('importConfirmBtn').textContent = 'Done ✓';
-    document.getElementById('importConfirmBtn').disabled = true;
-    parsedRows = [];
-    if (cardUpdated) renderAll(); // refresh after UI feedback so any render error doesn't block it
-    return;
-  }
-
-  // ── Import transactions ─────────────────────────────────────────────────────
   const existing = new Set(D.transactions.map(t => t.date+'|'+t.desc+'|'+t.amount));
   let added = 0, dupes = 0;
   parsedRows.forEach(r => {
     const key = r.date+'|'+r.desc+'|'+r.amount;
     if (existing.has(key)) { dupes++; return; }
-    const cat = r.cat || 'Other';
-    const type = cat === 'EMI' ? 'debit' : (r.type || 'debit');
+    const cat = r.cat;
+    const type = cat === 'EMI' ? 'debit' : r.type; // Force EMI to always be debit
     D.transactions.unshift({
       id: Date.now()+Math.random(),
-      desc: r.desc || '', amount: r.amount || 0, type: type,
-      cat: cat, member: m,
-      date: r.date || todayStr(),
+      desc: r.desc, amount: r.amount, type: type,
+      cat: cat, member: currentMember === 'all' ? 'madhu' : currentMember,
+      date: r.date,
       account: txnAccountId
     });
     added++;
   });
   D.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  // Save data and show feedback BEFORE renderAll so a render error never hides "Done ✓"
-  snapshotNW(); save();
-  let msg = `✓ Imported ${added} transactions · ${dupes} duplicates skipped`;
-  if (cardUpdated) msg += ' · Card updated';
-  if (added === 0 && dupes > 0) msg = `All ${dupes} transactions already imported (duplicates skipped)`;
-
-  document.getElementById('parse-status-badge').innerHTML = `<span class="parse-status parse-ok">${msg}</span>`;
+  save(); renderAll();
+  let msg = `✓ Imported ${added} txns`;
+  msg += ` · ${dupes} duplicates skipped`;
+  
+  document.getElementById('parse-status-badge').innerHTML =
+    `<span class="parse-status parse-ok">${msg}</span>`;
   const btn = document.getElementById('importConfirmBtn');
   btn.textContent = 'Done ✓'; btn.disabled = true;
   parsedRows = [];
-  renderAll(); // refresh after UI is already updated
 }
 
 // ─────────────────────────────────────────────

@@ -1211,7 +1211,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
       </div>
       <div class="two-col">
         <div class="panel">
-          <div class="panel-header"><span class="panel-title">Deductions — Old Regime</span><button class="panel-action" onclick="openTaxModal()">Update</button></div>
+          <div class="panel-header"><span class="panel-title">Deductions — Old Regime</span><span style="display:flex;gap:8px"><button class="panel-action" onclick="openForm16Modal()">📄 Form 16</button><button class="panel-action" onclick="openTaxModal()">Update</button></span></div>
           <div class="panel-body">
             <div class="tax-row"><span class="tax-key">Standard Deduction</span><span class="tax-val">₹75,000</span></div>
             <div class="tax-row"><span class="tax-key">80C (Limit ₹1,50,000)</span><span class="tax-val positive" id="t-80c">₹0 / ₹1,50,000</span></div>
@@ -1244,6 +1244,19 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
             </div>
             <div id="tax-verdict" class="alert alert-info" style="margin:0"><span>ℹ</span><span>Enter income to see comparison.</span></div>
           </div>
+        </div>
+      </div>
+      <!-- Form 16 — CA Computation + Insights -->
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Form 16 — Tax Computation (CA View)</span><button class="panel-action" onclick="openForm16Modal()">Analyze Form 16</button></div>
+          <div class="panel-body" id="tax-ca-sheet">
+            <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Upload your Form 16 to generate a CA-style computation for both regimes.</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">CA Insights &amp; Action Items</span></div>
+          <div class="panel-body" id="tax-ca-insights"></div>
         </div>
       </div>
       <!-- Capital Gains Panel -->
@@ -1430,11 +1443,6 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
             <option value="kotak">Kotak Mahindra</option>
             <option value="default">Other / Unknown</option>
           </optgroup>
-        </select>
-      </div>
-      <div class="form-group"><label class="form-label">Member</label>
-        <select class="form-select" id="m-rw-member">
-          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
         </select>
       </div>
       <div class="form-group"><label class="form-label">Points Balance</label><input class="form-input" id="m-rw-pts" type="number" placeholder="0"></div>
@@ -1762,7 +1770,7 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
 <div class="modal-backdrop" id="epfModal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('epfModal')">×</button>
-    <div class="modal-title" id="epfModalTitle">Update EPF</div>
+    <div class="modal-title">Update EPF</div>
     <div class="form-grid">
       <div class="form-group form-full"><label class="form-label">UAN</label><input class="form-input" id="m-epf-uan" placeholder="Universal Account Number"></div>
       <div class="form-group"><label class="form-label">Total Balance (₹)</label><input class="form-input" id="m-epf-bal" type="number" placeholder="0"></div>
@@ -1832,6 +1840,39 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
       <div class="form-group"><label class="form-label">HRA Exemption (₹)</label><input class="form-input" id="m-tax-hra" type="number" placeholder="0"></div>
     </div>
     <div class="modal-actions"><button class="btn" onclick="closeModal('taxModal')">Cancel</button><button class="btn btn-primary" onclick="saveTax()">Calculate</button></div>
+  </div>
+</div>
+
+<!-- Form 16 Analyzer Modal -->
+<div class="modal-backdrop" id="form16Modal">
+  <div class="modal" style="max-width:640px">
+    <button class="modal-close" onclick="closeModal('form16Modal')">×</button>
+    <div class="modal-title">Form 16 Analyzer</div>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Upload your Form 16 (Part B) PDF to auto-extract figures, or enter them manually. Review everything before saving — Form 16 layouts vary by employer.</div>
+
+    <label for="f16-file" class="btn btn-primary" style="display:inline-block;cursor:pointer;margin-bottom:8px">📄 Upload Form 16 PDF</label>
+    <input id="f16-file" type="file" accept="application/pdf" style="display:none" onchange="handleForm16Upload(this)">
+    <div id="f16-parse-status" style="margin-bottom:12px"></div>
+
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Employer</label><input class="form-input" id="f16-employer" placeholder="Company name"></div>
+      <div class="form-group"><label class="form-label">TAN</label><input class="form-input" id="f16-tan" placeholder="ABCD12345E"></div>
+      <div class="form-group"><label class="form-label">Assessment Year</label><input class="form-input" id="f16-ay" placeholder="2026-27"></div>
+      <div class="form-group"><label class="form-label">Gross Salary §17 (₹)</label><input class="form-input" id="f16-gross" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">HRA Exemption §10(13A) (₹)</label><input class="form-input" id="f16-hra" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Other §10 Exemptions / LTA (₹)</label><input class="form-input" id="f16-exempt" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Professional Tax §16(iii) (₹)</label><input class="form-input" id="f16-proftax" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80C (₹)</label><input class="form-input" id="f16-80c" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80CCD(1B) NPS (₹)</label><input class="form-input" id="f16-80ccd1b" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80CCD(2) Employer NPS (₹)</label><input class="form-input" id="f16-80ccd2" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80D Medical (₹)</label><input class="form-input" id="f16-80d" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">24(b) Home Loan Interest (₹)</label><input class="form-input" id="f16-24b" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80E Education Loan (₹)</label><input class="form-input" id="f16-80e" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80G Donations (₹)</label><input class="form-input" id="f16-80g" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80TTA/TTB Interest (₹)</label><input class="form-input" id="f16-80tta" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">TDS Deducted (₹)</label><input class="form-input" id="f16-tds" type="number" placeholder="0"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('form16Modal')">Cancel</button><button class="btn btn-primary" onclick="saveForm16()">Save &amp; Analyze</button></div>
   </div>
 </div>
 
