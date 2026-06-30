@@ -924,12 +924,10 @@ let selectedPolicyFile = null;
 function loadPdfJS() {
   if (typeof pdfjsLib === 'undefined') {
     const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
-    script.integrity = 'sha384-uLiAv4VcjM5H2Jsqzl8EajEaxPugj1CIzQaCjQ8c5//vC+elhxO5pZfXGxoLQi1W';
-    script.crossOrigin = 'anonymous';
+    script.src = 'vendor/pdf.min.js';
     script.onload = () => {
       window.pdfjsLib = window['pdfjs-dist/build/pdf'] || pdfjsLib;
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
     };
     document.head.appendChild(script);
   }
@@ -4365,27 +4363,29 @@ let parsedRows = [];
 let pendingPdfFile = null;
 
 async function ensurePdfJS() {
-  if (typeof window !== 'undefined' && window.pdfjsLib) return window.pdfjsLib;
+  if (typeof window !== 'undefined' && window.pdfjsLib) {
+    if (window.pdfjsLib.GlobalWorkerOptions && !window.pdfjsLib.GlobalWorkerOptions.workerSrc)
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+    return window.pdfjsLib;
+  }
   if (typeof window !== 'undefined' && window['pdfjs-dist/build/pdf']) {
     window.pdfjsLib = window['pdfjs-dist/build/pdf'];
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
     return window.pdfjsLib;
   }
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
-    script.integrity = 'sha384-uLiAv4VcjM5H2Jsqzl8EajEaxPugj1CIzQaCjQ8c5//vC+elhxO5pZfXGxoLQi1W';
-    script.crossOrigin = 'anonymous';
+    script.src = 'vendor/pdf.min.js';
     script.onload = () => {
       window.pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
       if (window.pdfjsLib) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
         resolve(window.pdfjsLib);
       } else {
         reject(new Error("PDF.js loaded but is undefined on window"));
       }
     };
-    script.onerror = () => reject(new Error("Failed to load PDF.js from CDN. Verify internet connectivity."));
+    script.onerror = () => reject(new Error("Failed to load PDF.js worker. Verify vendor/pdf.min.js exists."));
     document.head.appendChild(script);
   });
 }
