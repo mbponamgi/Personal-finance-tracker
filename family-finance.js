@@ -62,6 +62,8 @@ function load() {
 function deepMerge(target, source) {
   const out = Object.assign({}, target);
   for (const key in source) {
+    // Block prototype-pollution keys (e.g. from a polluted parse of stored/imported data).
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
       out[key] = deepMerge(target[key] || {}, source[key]);
     } else {
@@ -922,15 +924,9 @@ function saveScannedTxns() {
 let selectedPolicyFile = null;
 
 function loadPdfJS() {
-  if (typeof pdfjsLib === 'undefined') {
-    const script = document.createElement('script');
-    script.src = 'vendor/pdf.min.js';
-    script.onload = () => {
-      window.pdfjsLib = window['pdfjs-dist/build/pdf'] || pdfjsLib;
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
-    };
-    document.head.appendChild(script);
-  }
+  // pdf.js 4.x (ESM) is imported by the module <script> in index.html and put on window.pdfjsLib.
+  // Just warm it up (no-op if already present).
+  ensurePdfJS().catch(() => {});
 }
 
 function handlePolicyDrop(e) {
@@ -978,7 +974,7 @@ async function startAIScan() {
       
       while (true) {
         try {
-          loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer), password: pdfPassword });
+          loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer), password: pdfPassword, isEvalSupported: false });
           pdf = await loadingTask.promise;
           break;
         } catch (err) {
@@ -1230,7 +1226,7 @@ async function handleForm16Upload(input) {
     let pdf;
     while (true) {
       try {
-        pdf = await pdfjs.getDocument({ data: new Uint8Array(buf), password: pwd }).promise;
+        pdf = await pdfjs.getDocument({ data: new Uint8Array(buf), password: pwd, isEvalSupported: false }).promise;
         break;
       } catch (e) {
         if (e.name === 'PasswordException') {
@@ -4362,31 +4358,28 @@ let selectedBank = 'icici-salary';
 let parsedRows = [];
 let pendingPdfFile = null;
 
+function ensurePdfJSReady(lib) {
+  if (lib && lib.GlobalWorkerOptions && !lib.GlobalWorkerOptions.workerSrc)
+    lib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+  return lib;
+}
+
 async function ensurePdfJS() {
-  if (typeof window !== 'undefined' && window.pdfjsLib) {
-    if (window.pdfjsLib.GlobalWorkerOptions && !window.pdfjsLib.GlobalWorkerOptions.workerSrc)
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
-    return window.pdfjsLib;
-  }
-  if (typeof window !== 'undefined' && window['pdfjs-dist/build/pdf']) {
-    window.pdfjsLib = window['pdfjs-dist/build/pdf'];
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
-    return window.pdfjsLib;
-  }
+  // pdf.js 4.x (ESM) is imported by the module <script> in index.html, which assigns
+  // window.pdfjsLib once loaded. Resolve immediately if present, otherwise poll briefly
+  // for the module to finish loading (it loads eagerly on page load).
+  if (typeof window !== 'undefined' && window.pdfjsLib) return ensurePdfJSReady(window.pdfjsLib);
   return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'vendor/pdf.min.js';
-    script.onload = () => {
-      window.pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
-      if (window.pdfjsLib) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
-        resolve(window.pdfjsLib);
-      } else {
-        reject(new Error("PDF.js loaded but is undefined on window"));
+    let waited = 0;
+    const iv = setInterval(() => {
+      if (typeof window !== 'undefined' && window.pdfjsLib) {
+        clearInterval(iv);
+        resolve(ensurePdfJSReady(window.pdfjsLib));
+      } else if ((waited += 50) >= 10000) {
+        clearInterval(iv);
+        reject(new Error("PDF.js failed to load from vendor/pdf.min.js (check the module script in index.html)."));
       }
-    };
-    script.onerror = () => reject(new Error("Failed to load PDF.js worker. Verify vendor/pdf.min.js exists."));
-    document.head.appendChild(script);
+    }, 50);
   });
 }
 
@@ -5022,7 +5015,7 @@ async function processPdfParsing(file, pwd) {
     const pdfjs = await ensurePdfJS();
     const arrayBuffer = await file.arrayBuffer();
     
-    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer), password: pwd });
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer), password: pwd, isEvalSupported: false });
     const pdf = await loadingTask.promise;
     
     let textAll = '';

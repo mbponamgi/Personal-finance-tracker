@@ -535,7 +535,13 @@ svg.sparkline{width:100%;height:100%;overflow:visible;}
   font-weight: 600;
 }
 </style>
-<script src="vendor/pdf.min.js"></script>
+<script type="module">
+  // pdf.js 4.x is ESM — imported as a module (browser keys off type=module, not the file
+  // extension). Files use .js (not .mjs) so every IPFS gateway serves them as JavaScript.
+  import * as pdfjsLib from './vendor/pdf.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+  window.pdfjsLib = pdfjsLib;
+</script>
 </head>
 <body>
 
