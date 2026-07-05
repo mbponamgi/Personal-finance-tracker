@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(git -C /Users/mponamgi/Documents/Personal-finance-tracker checkout 633b7d6 -- family-finance.js index.html)",
+      "Bash(rm -f /tmp/repro-loan-delete.mjs && echo \"cleaned up\")"
+    ],
+    "additionalDirectories": [
+      "/private/tmp"
     ]
   }
 }

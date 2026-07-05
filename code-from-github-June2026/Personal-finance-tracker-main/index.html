@@ -1,0 +1,1957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:;">
+<title>Family Finance OS</title>
+<link href="vendor/fonts/fonts.css" rel="stylesheet">
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/chart.umd.js"></script>
+<style>
+/* ── THEME ── */
+:root {
+  --bg: #f5f2ee;
+  --surface: #ffffff;
+  --surface2: #f0ece6;
+  --border: #e2dbd2;
+  --border2: #d0c8bc;
+  --accent: #b5813a;
+  --accent-light: rgba(181,129,58,.10);
+  --accent2: #4a7c6f;
+  --accent2-light: rgba(74,124,111,.10);
+  --accent3: #7b5ea7;
+  --accent3-light: rgba(123,94,167,.10);
+  --green: #3a7d54;
+  --green-light: rgba(58,125,84,.10);
+  --red: #c0392b;
+  --red-light: rgba(192,57,43,.10);
+  --orange: #c0692b;
+  --orange-light: rgba(192,105,43,.10);
+  --text: #1e1a16;
+  --text2: #4a4540;
+  --muted: #8a8279;
+  --subtle: #c8c0b6;
+
+  /* member colors */
+  --m-madhu:   #b5813a;
+  --m-sailaja: #4a7c6f;
+  --m-parents: #7b5ea7;
+  --m-charan:  #3a7d54;
+  --m-himaja:  #c0692b;
+  --m-family:  #4a6fa5;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-weight:400;min-height:100vh;overflow-x:hidden;}
+
+/* ── SIDEBAR ── */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:236px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;overflow-y:auto;}
+.logo-wrap{padding:22px 22px 18px;border-bottom:1px solid var(--border);}
+.logo-name{font-family:'Lora',serif;font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.01em;}
+.logo-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-top:3px;}
+
+/* member switcher */
+.member-bar{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:5px;}
+.member-chip{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:1.5px solid transparent;transition:all .15s;white-space:nowrap;}
+.member-chip.active{color:#fff;}
+.mc-all   {background:#4a6fa5;border-color:#4a6fa5;color:#fff;}
+.mc-madhu {--mc:#b5813a;}
+.mc-sailaja{--mc:#4a7c6f;}
+.mc-parents{--mc:#7b5ea7;}
+.mc-charan{--mc:#3a7d54;}
+.mc-himaja{--mc:#c0692b;}
+.member-chip:not(.mc-all){background:rgba(0,0,0,.04);color:var(--text2);border-color:var(--border);}
+.member-chip:not(.mc-all):hover{background:color-mix(in srgb,var(--mc) 12%,transparent);border-color:var(--mc);color:var(--mc);}
+.member-chip:not(.mc-all).active{background:var(--mc);border-color:var(--mc);color:#fff;}
+
+.nav{padding:10px 0;flex:1;}
+.nav-section{margin-bottom:2px;}
+.nav-label{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;padding:8px 22px 4px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 18px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;border-left:2.5px solid transparent;margin:1px 0;}
+.nav-item:hover{color:var(--text);background:var(--surface2);}
+.nav-item.active{color:var(--accent);background:var(--accent-light);border-left-color:var(--accent);font-weight:500;}
+.nav-icon{font-size:13px;width:16px;text-align:center;flex-shrink:0;}
+
+.sidebar-footer{padding:12px 22px;border-top:1px solid var(--border);}
+.last-saved{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.08em;}
+
+/* ── MAIN ── */
+.main{margin-left:236px;min-height:100vh;}
+.topbar{padding:16px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(245,242,238,.92);backdrop-filter:blur(10px);position:sticky;top:0;z-index:90;}
+.page-title{font-family:'Lora',serif;font-size:20px;font-weight:600;color:var(--text);}
+.member-context{font-size:12px;color:var(--muted);margin-top:1px;}
+.topbar-right{display:flex;gap:8px;align-items:center;}
+.btn{padding:7px 14px;border-radius:8px;font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--surface);color:var(--text2);font-weight:400;}
+.btn:hover{border-color:var(--border2);color:var(--text);}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:500;}
+.btn-primary:hover{background:#c49040;}
+.btn-danger{background:var(--red-light);color:var(--red);border-color:rgba(192,57,43,.25);}
+.btn-danger:hover{background:rgba(192,57,43,.18);}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.content{padding:24px 32px;}
+
+/* ── VIEWS ── */
+.view{display:none;animation:fadeIn .2s ease;}
+.view.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── SUMMARY CARDS ── */
+.summary-grid{display:grid;gap:12px;margin-bottom:20px;}
+.g2{grid-template-columns:repeat(2,1fr);}
+.g3{grid-template-columns:repeat(3,1fr);}
+.g4{grid-template-columns:repeat(4,1fr);}
+.g5{grid-template-columns:repeat(5,1fr);}
+.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;}
+.summary-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;}
+.card-gold::after{background:linear-gradient(90deg,var(--accent),transparent);}
+.card-teal::after{background:linear-gradient(90deg,var(--accent2),transparent);}
+.card-purple::after{background:linear-gradient(90deg,var(--accent3),transparent);}
+.card-green::after{background:linear-gradient(90deg,var(--green),transparent);}
+.card-red::after{background:linear-gradient(90deg,var(--red),transparent);}
+.card-orange::after{background:linear-gradient(90deg,var(--orange),transparent);}
+.card-blue::after{background:linear-gradient(90deg,#4a6fa5,transparent);}
+.card-label{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.16em;text-transform:uppercase;margin-bottom:6px;}
+.card-value{font-family:'DM Mono',monospace;font-size:21px;font-weight:500;letter-spacing:-.02em;color:var(--text);}
+.card-value.gold{color:var(--accent);}
+.card-value.teal{color:var(--accent2);}
+.card-value.purple{color:var(--accent3);}
+.card-value.positive{color:var(--green);}
+.card-value.negative{color:var(--red);}
+.card-value.orange{color:var(--orange);}
+.card-value.blue{color:#4a6fa5;}
+.card-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+.card-delta{font-family:'DM Mono',monospace;font-size:10px;margin-top:6px;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;}
+.delta-up{color:var(--green);background:var(--green-light);}
+.delta-down{color:var(--red);background:var(--red-light);}
+
+/* ── PANEL ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.panel:last-child{margin-bottom:0;}
+.panel-header{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.panel-title{font-family:'Lora',serif;font-size:14px;font-weight:600;color:var(--text);}
+.panel-actions{display:flex;gap:6px;align-items:center;}
+.panel-action{font-size:11px;color:var(--accent);cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:.04em;background:none;border:1px solid transparent;padding:3px 8px;border-radius:6px;transition:all .15s;}
+.panel-action:hover{background:var(--accent-light);border-color:rgba(181,129,58,.2);}
+.panel-body{padding:16px 18px;}
+
+/* ── GRID LAYOUTS ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;}
+.col-7-5{display:grid;grid-template-columns:7fr 5fr;gap:16px;margin-bottom:16px;}
+
+/* ── ROWS ── */
+.data-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.data-row:last-child{border-bottom:none;padding-bottom:0;}
+.data-row:first-child{padding-top:0;}
+.row-left{display:flex;align-items:center;gap:10px;}
+.row-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.row-name{font-size:13px;font-weight:500;color:var(--text);}
+.row-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.row-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--text);}
+.row-val.negative{color:var(--red);}
+.row-val.positive{color:var(--green);}
+.row-right{text-align:right;}
+
+/* ── MEMBER TAG ── */
+.member-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
+.tag-madhu  {background:rgba(181,129,58,.12);color:var(--m-madhu);}
+.tag-sailaja{background:rgba(74,124,111,.12);color:var(--m-sailaja);}
+.tag-parents{background:rgba(123,94,167,.12);color:var(--m-parents);}
+.tag-charan {background:rgba(58,125,84,.12);color:var(--m-charan);}
+.tag-himaja {background:rgba(192,105,43,.12);color:var(--m-himaja);}
+.tag-joint  {background:rgba(74,111,165,.12);color:var(--m-family);}
+.txn-account-tag {display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:9px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;background:rgba(74,111,165,0.08);color:var(--m-family);margin-left:5px;}
+
+
+/* ── TABLE ── */
+.data-table{width:100%;border-collapse:collapse;}
+.data-table th{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;text-align:left;padding:0 8px 9px;border-bottom:1px solid var(--border);}
+.data-table td{padding:10px 8px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text);}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table td:last-child,.data-table th:last-child{text-align:right;}
+.data-table tr:hover td{background:var(--surface2);}
+
+/* ── PROGRESS ── */
+.progress-wrap{margin:8px 0;}
+.progress-label{display:flex;justify-content:space-between;margin-bottom:5px;font-size:11px;color:var(--muted);}
+.progress-bar{height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:3px;transition:width .6s ease;}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;}
+.badge-success{background:var(--green-light);color:var(--green);}
+.badge-warn{background:var(--accent-light);color:var(--accent);}
+.badge-danger{background:var(--red-light);color:var(--red);}
+.badge-neutral{background:var(--surface2);color:var(--muted);}
+.badge-purple{background:var(--accent3-light);color:var(--accent3);}
+.badge-teal{background:var(--accent2-light);color:var(--accent2);}
+
+/* ── ALERTS ── */
+.alert{border-radius:10px;padding:10px 13px;margin-bottom:9px;font-size:12px;display:flex;align-items:flex-start;gap:9px;border:1px solid;line-height:1.55;color:var(--text2);}
+.alert:last-child{margin-bottom:0;}
+.alert-warn{background:var(--accent-light);border-color:rgba(181,129,58,.25);}
+.alert-info{background:var(--accent2-light);border-color:rgba(74,124,111,.25);}
+.alert-success{background:var(--green-light);border-color:rgba(58,125,84,.25);}
+.alert-danger{background:var(--red-light);border-color:rgba(192,57,43,.25);}
+
+/* ── PROPERTY CARDS ── */
+.prop-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;transition:box-shadow .15s;}
+.prop-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.06);}
+.prop-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}
+.prop-type-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-family:'DM Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;}
+.prop-flat{background:rgba(74,111,165,.1);color:#4a6fa5;}
+.prop-house{background:var(--accent-light);color:var(--accent);}
+.prop-plot{background:var(--green-light);color:var(--green);}
+.prop-commercial{background:var(--accent2-light);color:var(--accent2);}
+.prop-agri{background:var(--accent3-light);color:var(--accent3);}
+.prop-name{font-size:14px;font-weight:600;color:var(--text);margin-top:5px;}
+.prop-location{font-size:11px;color:var(--muted);}
+.prop-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+.prop-meta-item .prop-meta-label{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-bottom:3px;}
+.prop-meta-item .prop-meta-val{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--text);}
+.prop-gain{color:var(--green);}
+.prop-loss{color:var(--red);}
+.prop-actions{display:flex;gap:6px;margin-top:10px;}
+
+/* ── LOAN CARDS ── */
+.loan-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;}
+.loan-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+.loan-type{display:inline-flex;padding:3px 10px;border-radius:20px;font-family:'DM Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;}
+.loan-home{background:var(--accent-light);color:var(--accent);}
+.loan-car{background:var(--accent2-light);color:var(--accent2);}
+.loan-personal{background:var(--accent3-light);color:var(--accent3);}
+.loan-education{background:var(--green-light);color:var(--green);}
+.loan-other{background:var(--surface2);color:var(--muted);}
+.loan-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;}
+.loan-meta-label{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;}
+.loan-meta-val{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;}
+.emi-bar{margin-top:12px;}
+
+/* ── GOLD CARDS ── */
+.gold-item{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);}
+.gold-item:last-child{border-bottom:none;}
+.gold-item-left{display:flex;align-items:center;gap:10px;}
+
+/* ── BUDGET ── */
+.budget-row{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
+.budget-label{font-size:12px;color:var(--text2);width:130px;flex-shrink:0;}
+.budget-bars{flex:1;}
+.budget-bar-wrap{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;position:relative;}
+.budget-bar-budget{height:100%;border-radius:3px;background:var(--border2);position:absolute;top:0;left:0;}
+.budget-bar-actual{height:100%;border-radius:3px;position:absolute;top:0;left:0;}
+.budget-vals{display:flex;justify-content:space-between;margin-top:3px;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);}
+.budget-pct{font-family:'DM Mono',monospace;font-size:11px;width:40px;text-align:right;flex-shrink:0;}
+
+/* ── NW CHART ── */
+.nw-chart-wrap{height:100px;position:relative;}
+svg.sparkline{width:100%;height:100%;overflow:visible;}
+
+/* ── TAX ROWS ── */
+.tax-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.tax-row:last-child{border-bottom:none;}
+.tax-key{color:var(--text2);}
+.tax-val{font-family:'DM Mono',monospace;font-weight:500;color:var(--text);}
+
+/* ── INSURANCE ── */
+.ins-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;}
+.ins-card:hover{border-color:var(--border2);}
+.ins-type-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-family:'DM Mono',monospace;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;}
+.ins-life{background:var(--accent-light);color:var(--accent);}
+.ins-health{background:var(--green-light);color:var(--green);}
+.ins-auto{background:var(--accent2-light);color:var(--accent2);}
+.ins-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;}
+.ins-meta-label{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;}
+.ins-meta-val{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;}
+.ins-due-soon{border-color:rgba(181,129,58,.4);background:rgba(181,129,58,.04);}
+.ins-overdue{border-color:rgba(192,57,43,.4);background:rgba(192,57,43,.04);}
+
+/* ── MODALS ── */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center;}
+.modal-backdrop.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;width:540px;max-width:95vw;max-height:88vh;overflow-y:auto;position:relative;animation:modalIn .2s ease;box-shadow:0 12px 40px rgba(0,0,0,.12);}
+.modal-lg{width:660px;}
+@keyframes modalIn{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-title{font-family:'Lora',serif;font-size:17px;font-weight:600;margin-bottom:18px;color:var(--text);}
+.modal-close{position:absolute;top:14px;right:14px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:color .15s;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}
+
+/* ── FORMS ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+.form-full{grid-column:1/-1;}
+.form-group{display:flex;flex-direction:column;gap:4px;}
+.form-label{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;}
+.form-input,.form-select{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 11px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;transition:border-color .15s;outline:none;width:100%;}
+.form-input:focus,.form-select:focus{border-color:var(--accent);background:var(--surface);}
+.form-select option{background:var(--surface);}
+.divider{height:1px;background:var(--border);margin:14px 0;}
+
+/* ── IMPORT ── */
+.import-zone{border:1.5px dashed var(--border2);border-radius:12px;padding:26px;text-align:center;cursor:pointer;transition:all .15s;color:var(--muted);font-size:13px;}
+.import-zone:hover{border-color:var(--accent);color:var(--text);}
+.bank-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px;}
+.bank-tab{padding:5px 13px;border-radius:7px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;cursor:pointer;border:1px solid var(--border);background:none;color:var(--muted);transition:all .12s;}
+.bank-tab.active{color:var(--accent);border-color:rgba(181,129,58,.35);background:var(--accent-light);}
+.bank-tab:hover:not(.active){color:var(--text);border-color:var(--border2);}
+.parse-preview{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px;margin-top:12px;max-height:200px;overflow-y:auto;}
+.parse-row{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:10px;}
+.parse-row:last-child{border-bottom:none;}
+.parse-cell{flex:1;color:var(--muted);font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.parse-cell.val{color:var(--text);}
+.parse-header{color:var(--accent)!important;font-weight:500;}
+.parse-status{display:inline-flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:6px;}
+.parse-ok{background:var(--green-light);color:var(--green);}
+.parse-err{background:var(--red-light);color:var(--red);}
+
+/* ── SPEND BARS ── */
+.spend-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+.spend-label{font-size:12px;color:var(--text2);width:130px;flex-shrink:0;}
+.spend-bar-wrap{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+.spend-bar-fill{height:100%;border-radius:3px;}
+.spend-val{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);width:80px;text-align:right;}
+
+/* ── WIDGET CARDS ── */
+.widget-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+.widget-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;transition:box-shadow .15s;}
+.widget-card:hover{box-shadow:0 2px 16px rgba(0,0,0,.07);}
+.widget-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;}
+.wc-gold::after{background:linear-gradient(90deg,var(--accent),transparent);}
+.wc-teal::after{background:linear-gradient(90deg,var(--accent2),transparent);}
+.wc-purple::after{background:linear-gradient(90deg,var(--accent3),transparent);}
+.wc-green::after{background:linear-gradient(90deg,var(--green),transparent);}
+.wc-red::after{background:linear-gradient(90deg,var(--red),transparent);}
+.wc-blue::after{background:linear-gradient(90deg,#4a6fa5,transparent);}
+.wc-orange::after{background:linear-gradient(90deg,var(--orange),transparent);}
+.widget-label{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;}
+.widget-value{font-family:'DM Mono',monospace;font-size:19px;font-weight:500;letter-spacing:-.02em;color:var(--text);}
+.widget-sub{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;}
+.widget-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace;font-size:9px;margin-top:6px;}
+.wchip-up{background:var(--green-light);color:var(--green);}
+.wchip-down{background:var(--red-light);color:var(--red);}
+.wchip-warn{background:var(--accent-light);color:var(--accent);}
+.wchip-neutral{background:var(--surface2);color:var(--muted);}
+.widget-bar-row{display:flex;align-items:center;gap:8px;margin-top:6px;}
+.widget-bar-bg{flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;}
+.widget-bar-fill{height:100%;border-radius:2px;transition:width .5s;}
+/* ── SEARCH BAR ── */
+.search-bar{display:flex;gap:8px;margin-bottom:14px;}
+.search-input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;}
+.search-input:focus{border-color:var(--accent);}
+.filter-select{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text2);outline:none;cursor:pointer;}
+/* ── TXN ROWS ── */
+.txn-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
+.txn-row:last-child{border-bottom:none;}
+.txn-left{display:flex;align-items:center;gap:9px;}
+.txn-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.txn-name{font-size:12px;font-weight:500;color:var(--text);}
+.txn-cat{font-size:10px;color:var(--muted);margin-top:1px;}
+.txn-amount{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;}
+.txn-amount.debit{color:var(--red);}
+.txn-amount.credit{color:var(--green);}
+
+/* ── MINI STATS ── */
+.mini-stats{display:flex;gap:16px;margin-top:8px;}
+.mini-stat-label{font-family:'DM Mono',monospace;font-size:8.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;}
+.mini-stat-val{font-family:'DM Mono',monospace;font-size:13px;margin-top:2px;color:var(--text);}
+.mini-stat-val.positive{color:var(--green);}
+.mini-stat-val.negative{color:var(--red);}
+
+/* ── EMPTY ── */
+.empty-state{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;}
+.empty-icon{font-size:24px;margin-bottom:7px;opacity:.5;}
+
+/* ── REWARD ── */
+.reward-pts{font-family:'DM Mono',monospace;font-size:20px;color:var(--accent);font-weight:500;}
+.reward-val{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+/* SECTION DIVIDER */
+.section-head{font-family:'Lora',serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:12px;margin-top:4px;}
+
+/* ── FINANCIAL CALENDAR ── */
+.btn-cal-nav {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.btn-cal-nav:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+.calendar-day-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 8.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.calendar-day-cell {
+  aspect-ratio: 1.2;
+  border-radius: 6px;
+  background: var(--surface2);
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+}
+.calendar-day-cell:hover {
+  border-color: var(--border2);
+  background: var(--surface);
+}
+.calendar-day-cell.other-month {
+  opacity: 0.35;
+  cursor: default;
+}
+.calendar-day-cell.selected {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 1.5px var(--accent-light);
+}
+.calendar-day-cell.today {
+  font-weight: bold;
+}
+.calendar-day-cell.today .day-number {
+  background: var(--text);
+  color: var(--surface);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.day-number {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  text-align: left;
+}
+.calendar-day-cell.today .day-number {
+  text-align: center;
+}
+.calendar-events-dots {
+  display: flex;
+  gap: 2.5px;
+  justify-content: center;
+  margin-top: auto;
+  min-height: 5px;
+}
+.cal-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.cal-dot.emi { background: var(--accent); }
+.cal-dot.ins { background: var(--green); }
+.cal-dot.sub { background: var(--orange); }
+
+.calendar-day-cell.low-balance-warning {
+  background: var(--red-light) !important;
+  border-color: rgba(192, 57, 43, 0.3) !important;
+}
+
+.calendar-day-cell.low-balance-warning .day-number {
+  color: var(--red);
+  font-weight: 600;
+}
+
+/* Timeline/Details items */
+.timeline-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: var(--surface2);
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.timeline-item:hover {
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.timeline-item.emi { border-left-color: var(--accent); }
+.timeline-item.ins { border-left-color: var(--green); }
+.timeline-item.sub { border-left-color: var(--orange); }
+
+.timeline-icon {
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.04);
+}
+.timeline-item.emi .timeline-icon { background: var(--accent-light); color: var(--accent); }
+.timeline-item.ins .timeline-icon { background: var(--green-light); color: var(--green); }
+.timeline-item.sub .timeline-icon { background: var(--orange-light); color: var(--orange); }
+
+.timeline-details {
+  flex: 1;
+}
+.timeline-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+.timeline-meta {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.timeline-amount {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+</style>
+<script type="module">
+  // pdf.js 4.x is ESM — imported as a module (browser keys off type=module, not the file
+  // extension). Files use .js (not .mjs) so every IPFS gateway serves them as JavaScript.
+  import * as pdfjsLib from './vendor/pdf.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+  window.pdfjsLib = pdfjsLib;
+</script>
+</head>
+<body>
+
+<!-- ══════════ SIDEBAR ══════════ -->
+<nav class="sidebar">
+  <div class="logo-wrap">
+    <div class="logo-name">Family Finance OS</div>
+    <div class="logo-sub">FY 2025–26</div>
+  </div>
+
+  <!-- Member Switcher -->
+  <div class="member-bar">
+    <div class="member-chip mc-all active" data-member="all" onclick="setMember('all',this)">All</div>
+    <div class="member-chip mc-madhu" data-member="madhu" onclick="setMember('madhu',this)">Madhu</div>
+    <div class="member-chip mc-sailaja" data-member="sailaja" onclick="setMember('sailaja',this)">Sailaja</div>
+    <div class="member-chip mc-parents" data-member="parents" onclick="setMember('parents',this)">Parents</div>
+    <div class="member-chip mc-charan" data-member="charan" onclick="setMember('charan',this)">Charan</div>
+    <div class="member-chip mc-himaja" data-member="himaja" onclick="setMember('himaja',this)">Himaja</div>
+  </div>
+
+  <div class="nav">
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item active" onclick="go('overview')"><span class="nav-icon">◈</span>Dashboard</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Accounts</div>
+      <div class="nav-item" onclick="go('accounts')"><span class="nav-icon">⬡</span>Bank Accounts</div>
+      <div class="nav-item" onclick="go('cards')"><span class="nav-icon">▭</span>Credit Cards</div>
+      <div class="nav-item" onclick="go('rewards')"><span class="nav-icon">◇</span>Reward Points</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Assets</div>
+      <div class="nav-item" onclick="go('property')"><span class="nav-icon">⌂</span>Property</div>
+      <div class="nav-item" onclick="go('gold')"><span class="nav-icon">◎</span>Gold &amp; Jewellery</div>
+      <div class="nav-item" onclick="go('investments')"><span class="nav-icon">↗</span>Investments</div>
+      <div class="nav-item" onclick="go('epf')"><span class="nav-icon">⬟</span>EPF</div>
+      <div class="nav-item" onclick="go('nps')"><span class="nav-icon">⬠</span>NPS</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Liabilities</div>
+      <div class="nav-item" onclick="go('loans')"><span class="nav-icon">≈</span>Loans &amp; EMI</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Protection</div>
+      <div class="nav-item" onclick="go('insurance')"><span class="nav-icon">⛨</span>Insurance</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Planning</div>
+      <div class="nav-item" onclick="go('budget')"><span class="nav-icon">⊞</span>Budget vs Actuals</div>
+      <div class="nav-item" onclick="go('tax')"><span class="nav-icon">≋</span>Tax Tracker</div>
+      <div class="nav-item" onclick="go('transactions')"><span class="nav-icon">≡</span>Transactions</div>
+      <div class="nav-item" onclick="go('import')"><span class="nav-icon">⤓</span>Import Statement</div>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="last-saved" id="lastUpdated">Not yet saved</div>
+  </div>
+</nav>
+
+<!-- ══════════ MAIN ══════════ -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div id="pageTitle" class="page-title">Dashboard</div>
+      <div class="member-context" id="memberContext">Family — All Members</div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn" id="toggleHideNumbersBtn" onclick="toggleHideNumbers()">👁 Show Balances</button>
+      <button class="btn" onclick="go('import')">⤓ Import</button>
+      <button class="btn btn-primary" onclick="ctxAdd()">+ Add Entry</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══════════ OVERVIEW ══════════ -->
+    <div class="view active" id="view-overview">
+      <div class="summary-grid g5">
+        <div class="summary-card card-gold">
+          <div class="card-label">Net Worth</div>
+          <div class="card-value gold" id="ov-nw">₹0</div>
+          <div class="card-sub">Total Assets − Liabilities</div>
+          <div class="card-delta delta-up" id="ov-nw-delta" style="display:none"></div>
+        </div>
+        <div class="summary-card card-teal">
+          <div class="card-label">Liquid Balance</div>
+          <div class="card-value teal" id="ov-liquid">₹0</div>
+          <div class="card-sub">Banks + Savings</div>
+        </div>
+        <div class="summary-card card-blue">
+          <div class="card-label">Property Value</div>
+          <div class="card-value blue" id="ov-prop">₹0</div>
+          <div class="card-sub">Market value</div>
+        </div>
+        <div class="summary-card card-purple">
+          <div class="card-label">Investments</div>
+          <div class="card-value purple" id="ov-inv">₹0</div>
+          <div class="card-sub">MF · Stocks · FD · Gold</div>
+        </div>
+        <div class="summary-card card-red">
+          <div class="card-label">Total Liabilities</div>
+          <div class="card-value negative" id="ov-liab">₹0</div>
+          <div class="card-sub">Loans + Cards</div>
+        </div>
+      </div>
+
+      <!-- SMART WIDGETS ROW 1 -->
+      <div class="widget-grid">
+        <div class="widget-card wc-green" id="w-salary" onclick="openSalaryHistory()" style="cursor:pointer" title="Click to see salary history"></div>
+        <div class="widget-card wc-orange" id="w-recurring" onclick="openRecurringDetail()" style="cursor:pointer" title="Click to see all recurring transactions"></div>
+        <div class="widget-card wc-teal" id="w-cashflow"></div>
+        <div class="widget-card wc-gold" id="w-nw-velocity"></div>
+      </div>
+      <!-- SMART WIDGETS ROW 2 -->
+      <div class="widget-grid">
+        <div class="widget-card wc-purple" id="w-tax-harvest"></div>
+        <div class="widget-card wc-blue" id="w-cc-score"></div>
+        <div class="widget-card wc-red" id="w-debt-paydown"></div>
+        <div class="widget-card wc-orange" id="w-lifestyle"></div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Net Worth Trend</span>
+            <select class="filter-select" id="nw-chart-range" onchange="renderNWChart()" style="font-size:10px;padding:3px 6px;">
+              <option value="6">Last 6 Months</option>
+              <option value="12" selected>Last 12 Months</option>
+              <option value="all">All Time</option>
+            </select>
+          </div>
+          <div class="panel-body" style="padding:10px 14px;">
+            <div style="height:120px;position:relative;width:100%;">
+              <canvas id="nwChartCanvas"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Alerts &amp; Nudges</span></div>
+          <div class="panel-body" id="ov-alerts">
+            <div class="alert alert-info"><span>ℹ</span><span>Add your balances to get started.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BILL & PAYMENT CALENDAR -->
+      <div class="two-col" style="margin-bottom:16px;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">&#x1F4C5; Bill &amp; Payment Calendar</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="btn-cal-nav" onclick="prevMonth()">&#8249;</button>
+              <span id="calendar-month-year" style="font-family:'Lora',serif;font-size:13px;font-weight:600;min-width:90px;text-align:center;color:var(--text);"></span>
+              <button class="btn-cal-nav" onclick="nextMonth()">&#8250;</button>
+            </div>
+          </div>
+          <div class="panel-body" style="padding:12px;">
+            <div class="calendar-grid" id="calendar-grid"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">&#x1F514; Upcoming Bills &amp; Alerts</span>
+          </div>
+          <div class="panel-body" id="calendar-details" style="padding:12px;overflow-y:auto;max-height:260px;">
+            <div class="empty-state">Select a day on the calendar to see details</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="three-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Asset Breakdown</span></div>
+          <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:14px 10px;">
+            <div style="flex:1 0 130px;height:140px;position:relative;display:flex;justify-content:center;align-items:center;">
+              <canvas id="assetDoughnutCanvas"></canvas>
+            </div>
+            <div style="flex:1.5 0 170px;display:flex;flex-direction:column;gap:5px;width:100%;" id="ov-assets-breakdown">
+              <div class="empty-state"><div class="empty-icon">◈</div>Add assets to see breakdown</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Loans &amp; EMI</span><button class="panel-action" onclick="go('loans')">View all →</button></div>
+          <div class="panel-body" id="ov-loans-mini">
+            <div class="empty-state"><div class="empty-icon">≈</div>No loans</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Insurance Due Soon</span><button class="panel-action" onclick="go('insurance')">View all →</button></div>
+          <div class="panel-body" id="ov-insurance">
+            <div class="empty-state"><div class="empty-icon">⛨</div>No policies</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="two-col" style="margin-bottom:0">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Monthly Spend by Category</span></div>
+          <div class="panel-body" id="ov-spend">
+            <div class="empty-state"><div class="empty-icon">≋</div>No transactions this month</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Member Net Worth</span></div>
+          <div class="panel-body" id="ov-member-nw">
+            <div class="empty-state"><div class="empty-icon">◈</div>Add data to see member breakdown</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRANSACTION INTELLIGENCE PANEL -->
+      <div class="three-col" style="margin-bottom:0" id="txn-intel-wrap">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">&#x1F4CB; Auto-Detected EMIs</span><button class="panel-action" onclick="go('loans')">Manage loans →</button></div>
+          <div class="panel-body" id="ov-txn-emis"><div class="empty-state"><div class="empty-icon">≈</div>Import transactions to detect EMIs</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">&#x1F4B8; Income &amp; Credits</span><button class="panel-action" onclick="go('transactions')">View all →</button></div>
+          <div class="panel-body" id="ov-txn-income"><div class="empty-state"><div class="empty-icon">↑</div>Import transactions to see income</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">&#x1F4CA; Spend Breakdown (All Time)</span><button class="panel-action" onclick="go('transactions')">View all →</button></div>
+          <div class="panel-body" id="ov-txn-cats"><div class="empty-state"><div class="empty-icon">≋</div>Import transactions to see breakdown</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ ACCOUNTS ══════════ -->
+    <div class="view" id="view-accounts">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Bank Accounts</span>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('accModalTitle').textContent='Add Bank Account';document.getElementById('m-acc-id').value='';openModal('accModal')">+ Add Account</button>
+        </div>
+        <div class="panel-body" id="acc-list">
+          <div class="empty-state"><div class="empty-icon">⬡</div>No accounts added</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ CARDS ══════════ -->
+    <div class="view" id="view-cards">
+      <div class="summary-grid g3">
+        <div class="summary-card card-red"><div class="card-label">Total Outstanding</div><div class="card-value negative" id="cards-total">₹0</div></div>
+        <div class="summary-card card-gold"><div class="card-label">MTD Spend (Cards)</div><div class="card-value gold" id="cards-mtd">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Combined Limit</div><div class="card-value teal" id="cards-limit">₹0</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Credit Cards</span>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('cardModalTitle').textContent='Add Credit Card';document.getElementById('m-card-id').value='';openModal('cardModal')">+ Add Card</button>
+        </div>
+        <div class="panel-body" id="card-list">
+          <div class="empty-state"><div class="empty-icon">▭</div>No cards added</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ REWARDS ══════════ -->
+    <div class="view" id="view-rewards">
+      <div class="summary-grid g3">
+        <div class="summary-card card-gold"><div class="card-label">Total Points Value</div><div class="card-value gold" id="rw-total-val">₹0</div><div class="card-sub">Est. redemption value</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Programs Tracked</div><div class="card-value teal" id="rw-programs-count">0</div><div class="card-sub">Across all cards</div></div>
+        <div class="summary-card card-orange"><div class="card-label">Expiring Soon</div><div class="card-value orange" id="rw-expiring-count">—</div><div class="card-sub">Within 90 days</div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="section-head" style="margin:0">Reward Programs</div>
+        <button class="btn btn-primary btn-sm" onclick="openRewardModal(null)">+ Add Program</button>
+      </div>
+      <div id="reward-list"></div>
+    </div>
+
+    <!-- ══════════ PROPERTY ══════════ -->
+    <div class="view" id="view-property">
+      <div class="summary-grid g4">
+        <div class="summary-card card-blue"><div class="card-label">Total Market Value</div><div class="card-value blue" id="prop-total-val">₹0</div><div class="card-sub">All properties</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Total Cost Basis</div><div class="card-value gold" id="prop-total-cost">₹0</div><div class="card-sub">Purchase price</div></div>
+        <div class="summary-card card-green"><div class="card-label">Unrealised Gain</div><div class="card-value positive" id="prop-total-gain">₹0</div></div>
+        <div class="summary-card card-orange"><div class="card-label">Properties</div><div class="card-value orange" id="prop-count">0</div></div>
+      </div>
+      <div class="col-7-5" style="margin-bottom:0">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="section-head" style="margin:0">All Properties</div>
+            <button class="btn btn-primary btn-sm" onclick="openAddProp()">+ Add Property</button>
+          </div>
+          <div id="prop-list"><div class="empty-state"><div class="empty-icon">⌂</div>No properties added yet</div></div>
+        </div>
+        <div>
+          <div class="section-head">Summary &amp; Tax</div>
+          <div class="panel">
+            <div class="panel-body">
+              <div class="tax-row"><span class="tax-key">Residential Flats</span><span class="tax-val" id="prop-summary-flat">—</span></div>
+              <div class="tax-row"><span class="tax-key">Houses / Villas</span><span class="tax-val" id="prop-summary-house">—</span></div>
+              <div class="tax-row"><span class="tax-key">Plots / Land</span><span class="tax-val" id="prop-summary-plot">—</span></div>
+              <div class="tax-row"><span class="tax-key">Tax Due (Next 30d)</span><span class="tax-val" id="prop-tax-due">—</span></div>
+              <div class="divider"></div>
+              <div class="card-label" style="margin-bottom:5px">Capital Gains Exposure</div>
+              <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--green)" id="prop-cap-gain">₹0</div>
+              <div class="card-sub">Unrealised gain across all properties</div>
+              <div class="alert alert-info" style="margin-top:12px"><span>ℹ</span><span>Properties held &gt;2 years qualify for LTCG indexation benefit under old regime.</span></div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:0">
+            <div class="panel-header"><span class="panel-title">Property Tax Upcoming</span></div>
+            <div class="panel-body" id="prop-tax-list">
+              <div class="empty-state"><div class="empty-icon">≋</div>No due dates set</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ GOLD ══════════ -->
+    <div class="view" id="view-gold">
+      <div class="summary-grid g3">
+        <div class="summary-card card-gold"><div class="card-label">Total Gold Value</div><div class="card-value gold" id="gold-total-val">₹0</div><div class="card-sub">At current rate</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Total Weight</div><div class="card-value teal" id="gold-total-wt">0 g</div></div>
+        <div class="summary-card card-green"><div class="card-label">Unrealised Gain</div><div class="card-value positive" id="gold-total-gain">₹0</div></div>
+      </div>
+      <div class="two-col" style="margin-bottom:0">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Holdings</span>
+            <div class="panel-actions">
+              <span style="font-size:11px;color:var(--muted)">Rate (₹/g):</span>
+              <input type="number" id="gold-rate-input" class="form-input" style="width:90px;padding:4px 8px;font-size:12px" placeholder="7500" onchange="goldRateChanged()" value="7500">
+              <button class="panel-action" onclick="openAddGold()">+ Add</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="gold-list"><div class="empty-state"><div class="empty-icon">◎</div>No gold holdings added</div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Notes</span></div>
+          <div class="panel-body">
+            <div class="alert alert-warn"><span>⚡</span><span>Update the current gold rate (₹/g) on the left to recalculate all values.</span></div>
+            <div class="alert alert-info" style="margin-top:0"><span>ℹ</span><span>Digital Gold (SGBs, ETFs) tracked under Investments section for returns tracking.</span></div>
+            <div style="margin-top:14px">
+              <div class="card-label" style="margin-bottom:6px">By Member</div>
+              <div id="gold-by-member"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ INVESTMENTS ══════════ -->
+    <div class="view" id="view-investments">
+      <!-- Overall Portfolio Split Bar + History Chart -->
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:16px">
+        <div class="summary-card" style="margin-bottom:0">
+          <div class="card-label">India · Global Split</div>
+          <div style="margin-top:10px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px">
+              <span id="inv-india-pct-label">🇮🇳 —</span>
+              <span id="inv-global-pct-label">🌐 —</span>
+            </div>
+            <div style="background:var(--surface2);border-radius:4px;height:8px;overflow:hidden;display:flex">
+              <div id="inv-india-pct-bar" style="height:100%;background:var(--accent);border-radius:4px 0 0 4px;transition:width .4s;width:0%"></div>
+              <div id="inv-global-pct-bar" style="height:100%;background:var(--accent2);border-radius:0 4px 4px 0;transition:width .4s;width:0%"></div>
+            </div>
+          </div>
+          <div id="inv-split-vals" style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:8px">
+            <span id="inv-india-val-label"></span>
+            <span id="inv-global-val-label"></span>
+          </div>
+        </div>
+        <div class="panel" style="margin-bottom:0;padding:0">
+          <div class="panel-header" style="padding:10px 14px 6px">
+            <span class="panel-title" style="font-size:12px">Portfolio Value History</span>
+            <span id="inv-chart-empty" style="font-size:10px;color:var(--muted)">Save investments to start tracking</span>
+          </div>
+          <div style="height:72px;padding:0 8px 8px">
+            <canvas id="inv-chart-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two-col: Indian + Global Portfolios -->
+      <div class="two-col" style="margin-bottom:0">
+        <!-- Indian Portfolio -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">🇮🇳 Indian Portfolio</span>
+            <button class="panel-action" onclick="openAddInv()">+ Add</button>
+          </div>
+          <div style="display:flex;gap:0;border-bottom:1px solid var(--border)">
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)">Invested</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent);font-family:'DM Mono',monospace" id="inv-in-cost">₹0</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)">Value</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent2);font-family:'DM Mono',monospace" id="inv-in-val">₹0</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)">P&amp;L</div>
+              <div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace" id="inv-in-pnl">₹0</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <table class="data-table">
+              <thead><tr><th>Name</th><th>Type</th><th>Member</th><th>Invested</th><th>Value</th><th>Returns</th></tr></thead>
+              <tbody id="inv-rows-india"><tr><td colspan="6"><div class="empty-state"><div class="empty-icon">↗</div>No Indian investments</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Global Portfolio -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">🌐 Global Portfolio</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <label style="font-size:11px;color:var(--muted);white-space:nowrap">View in</label>
+              <select id="inv-display-currency" onchange="setInvDisplayCurrency(this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);cursor:pointer;height:26px">
+                <option value="INR">₹ INR</option>
+              </select>
+              <button class="panel-action" onclick="openFxModal()">FX Rates</button>
+              <button class="panel-action" onclick="openAddInv()">+ Add</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:0;border-bottom:1px solid var(--border)">
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)" id="inv-gl-cost-label">Invested (INR)</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent);font-family:'DM Mono',monospace" id="inv-gl-cost">₹0</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)" id="inv-gl-val-label">Value (INR)</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent2);font-family:'DM Mono',monospace" id="inv-gl-val">₹0</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center;padding:8px 4px">
+              <div style="font-size:10px;color:var(--muted)" id="inv-gl-pnl-label">P&amp;L (INR)</div>
+              <div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace" id="inv-gl-pnl">₹0</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <table class="data-table">
+              <thead><tr><th>Name</th><th>Type</th><th>Member</th><th>Invested</th><th>Value</th><th>Returns</th></tr></thead>
+              <tbody id="inv-rows-global"><tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🌐</div>No global investments</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ EPF ══════════ -->
+    <div class="view" id="view-epf">
+      <div class="summary-grid g4">
+        <div class="summary-card card-teal"><div class="card-label">EPF Balance</div><div class="card-value teal" id="epf-bal-display">₹0</div><div class="card-sub">Employee + Employer</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Monthly Contribution</div><div class="card-value gold" id="epf-monthly-display">₹0</div></div>
+        <div class="summary-card card-purple"><div class="card-label">Gratuity Accrued</div><div class="card-value purple" id="grat-amount-display">₹0</div><div class="card-sub" id="grat-years-display">Enter joining date</div></div>
+        <div class="summary-card card-green"><div class="card-label">Interest Rate</div><div class="card-value positive">8.25%</div><div class="card-sub">FY 2024–25</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">EPF Details</span><button class="panel-action" onclick="openEPFModal()">Update</button></div>
+          <div class="panel-body">
+            <div class="tax-row"><span class="tax-key">UAN</span><span class="tax-val" id="epf-uan-d">—</span></div>
+            <div class="tax-row"><span class="tax-key">Employee Share</span><span class="tax-val" id="epf-emp-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Employer Share</span><span class="tax-val" id="epf-er-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Interest Earned</span><span class="tax-val positive" id="epf-int-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Last Updated</span><span class="tax-val" id="epf-upd-d">—</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Gratuity Details</span><button class="panel-action" onclick="openGratuityModal()">Update</button></div>
+          <div class="panel-body">
+            <div class="tax-row"><span class="tax-key">Employer</span><span class="tax-val" id="grat-employer-d">—</span></div>
+            <div class="tax-row"><span class="tax-key">Date of Joining</span><span class="tax-val" id="grat-joined-d">—</span></div>
+            <div class="tax-row"><span class="tax-key">Basic + DA (monthly)</span><span class="tax-val" id="grat-basic-d">—</span></div>
+            <div class="tax-row"><span class="tax-key">Computed Gratuity</span><span class="tax-val" id="grat-computed-d">—</span></div>
+            <div class="tax-row"><span class="tax-key">Actual (from payslip)</span><span class="tax-val" id="grat-actual-d">Using computed</span></div>
+            <div class="divider"></div>
+            <div id="grat-eligibility" style="font-size:11px;font-weight:500;margin-bottom:6px;color:var(--muted)">Enter joining date to check</div>
+            <div class="progress-wrap">
+              <div class="progress-label"><span>₹20L tax-free buffer used</span><span id="grat-taxfree-pct">0%</span></div>
+              <div class="progress-bar"><div class="progress-fill" id="grat-taxfree-bar" style="width:0%;background:var(--accent3)"></div></div>
+            </div>
+            <div class="alert alert-info" style="margin-top:12px"><span>ℹ</span><span>Formula: (Basic+DA × 15/26) × yrs. Tax-free up to ₹20L under Sec 10(10).</span></div>
+          </div>
+        </div>
+      </div>
+      <!-- EPF Retirement Projection -->
+      <div class="panel" style="margin-top:0">
+        <div class="panel-header"><span class="panel-title">Retirement Projection</span></div>
+        <div class="panel-body" id="epf-projection-body">
+          <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Add your birth year via Update to see EPF corpus projection at retirement.</span></div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:0">
+        <div class="panel-header"><span class="panel-title">80C Impact</span></div>
+        <div class="panel-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+          <div>
+            <div class="card-label">EPF → 80C Deduction</div>
+            <div class="card-value gold" id="epf-80c-d">₹0</div>
+          </div>
+          <div>
+            <div class="progress-wrap" style="margin-top:8px">
+              <div class="progress-label"><span>80C utilized via EPF</span><span id="epf-80c-pct">0%</span></div>
+              <div class="progress-bar"><div class="progress-fill" id="epf-80c-bar" style="width:0%;background:var(--accent2)"></div></div>
+            </div>
+            <div class="alert alert-info" style="margin-top:12px"><span>ℹ</span><span>Employee EPF contribution counts toward ₹1.5L 80C limit under old regime.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ NPS ══════════ -->
+    <div class="view" id="view-nps">
+      <div class="summary-grid g3">
+        <div class="summary-card card-purple"><div class="card-label">NPS Balance</div><div class="card-value purple" id="nps-bal-d">₹0</div><div class="card-sub">Tier I + II</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Monthly SIP</div><div class="card-value gold" id="nps-sip-d">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Tax Saved (80CCD)</div><div class="card-value positive" id="nps-tax-d">₹0</div><div class="card-sub">At 30% slab</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">NPS Details</span><button class="panel-action" onclick="openNpsModal()">Update</button></div>
+          <div class="panel-body">
+            <div class="tax-row"><span class="tax-key">PRAN</span><span class="tax-val" id="nps-pran-d">—</span></div>
+            <div class="tax-row"><span class="tax-key">Tier I</span><span class="tax-val" id="nps-t1-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Tier II</span><span class="tax-val" id="nps-t2-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">FY Contribution</span><span class="tax-val" id="nps-contrib-d">₹0</span></div>
+            <div class="tax-row"><span class="tax-key">Equity %</span><span class="tax-val" id="nps-eq-d">—</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">80CCD(1B) Tracker</span></div>
+          <div class="panel-body">
+            <div class="progress-wrap">
+              <div class="progress-label"><span>₹50,000 limit used</span><span id="nps-80ccd-pct">0%</span></div>
+              <div class="progress-bar"><div class="progress-fill" id="nps-80ccd-bar" style="width:0%;background:var(--accent3)"></div></div>
+            </div>
+            <div class="mini-stats" style="margin-top:14px">
+              <div><div class="mini-stat-label">Contributed</div><div class="mini-stat-val" id="nps-ctb-d">₹0</div></div>
+              <div><div class="mini-stat-label">Remaining</div><div class="mini-stat-val" id="nps-rem-d">₹50,000</div></div>
+            </div>
+            <div class="alert alert-success" style="margin-top:14px"><span>✓</span><span>NPS 80CCD(1B) is over and above 80C. ₹50K extra deduction = ₹15,600 saved at 30% slab.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ LOANS ══════════ -->
+    <div class="view" id="view-loans">
+      <div class="summary-grid g4">
+        <div class="summary-card card-red"><div class="card-label">Total Outstanding</div><div class="card-value negative" id="loan-total">₹0</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Total Monthly EMI</div><div class="card-value gold" id="loan-emi-total">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Total Interest Paid</div><div class="card-value teal" id="loan-int-paid">₹0</div></div>
+        <div class="summary-card card-purple"><div class="card-label">Active Loans</div><div class="card-value purple" id="loan-count">0</div></div>
+      </div>
+      <div class="col-7-5" style="margin-bottom:0">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="section-head" style="margin:0">All Loans</div>
+            <button class="btn btn-primary btn-sm" onclick="openAddLoan()">+ Add Loan</button>
+          </div>
+          <div id="loan-list"><div class="empty-state"><div class="empty-icon">≈</div>No loans added</div></div>
+        </div>
+        <div>
+          <div class="section-head">EMI Calendar</div>
+          <div class="panel">
+            <div class="panel-body" id="loan-calendar">
+              <div class="empty-state"><div class="empty-icon">≋</div>No upcoming EMIs</div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:0">
+            <div class="panel-header"><span class="panel-title">24(b) Home Loan Deduction</span></div>
+            <div class="panel-body">
+              <div class="card-value gold" id="loan-24b-val">₹0</div>
+              <div class="card-sub">Interest deduction claimed</div>
+              <div class="progress-wrap" style="margin-top:10px">
+                <div class="progress-label"><span>₹2L limit used</span><span id="loan-24b-pct">0%</span></div>
+                <div class="progress-bar"><div class="progress-fill" id="loan-24b-bar" style="width:0%;background:var(--accent)"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ INSURANCE ══════════ -->
+    <div class="view" id="view-insurance">
+      <div class="summary-grid g4">
+        <div class="summary-card card-gold"><div class="card-label">Annual Premiums</div><div class="card-value gold" id="ins-total-premium">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Life Cover</div><div class="card-value positive" id="ins-life-cover">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Health Cover</div><div class="card-value teal" id="ins-health-cover">₹0</div></div>
+        <div class="summary-card card-orange"><div class="card-label">Policies</div><div class="card-value orange" id="ins-count">0</div></div>
+      </div>
+      <div class="col-7-5" style="margin-bottom:0">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="section-head" style="margin:0">All Policies</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" onclick="openModal('aiInsModal')" style="background:linear-gradient(135deg, #7b5ea7, #4a6fa5);border:none;color:white;display:flex;align-items:center;gap:4px">📄 Scan Policy Document</button>
+              <button class="btn btn-secondary btn-sm" onclick="scanTxnsForInsurance()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);display:flex;align-items:center;gap:4px">🔍 Scan from Transactions</button>
+              <button class="btn btn-primary btn-sm" onclick="openAddIns()">+ Add Manually</button>
+            </div>
+          </div>
+          <div id="ins-gap-detector" style="margin-bottom:16px;background:rgba(235,87,87,0.1);border:1px solid rgba(235,87,87,0.3);border-radius:8px;padding:12px;color:var(--red);font-size:13px;display:none"></div>
+          <div id="ins-list"><div class="empty-state"><div class="empty-icon">⛨</div>No policies added yet</div></div>
+        </div>
+        <div>
+          <div class="section-head">Family Coverage Summary</div>
+          <div class="panel" style="margin-bottom:20px">
+            <div class="panel-body" id="ins-coverage-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
+              <!-- Auto generated -->
+            </div>
+          </div>
+          <div class="section-head" style="margin-top:20px;margin-bottom:5px">80D Deduction (Health Premiums)</div>
+              <div class="card-value positive" style="font-size:18px" id="ins-80d-val">₹0</div>
+              <div class="progress-wrap" style="margin-top:8px">
+                <div class="progress-label"><span>80D limit (₹25K self + ₹50K parents)</span><span id="ins-80d-pct">0%</span></div>
+                <div class="progress-bar"><div class="progress-fill" id="ins-80d-bar" style="width:0%;background:var(--green)"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ BUDGET ══════════ -->
+    <div class="view" id="view-budget">
+      <div class="summary-grid g4">
+        <div class="summary-card card-teal"><div class="card-label">Monthly Budget</div><div class="card-value teal" id="bud-total">₹0</div></div>
+        <div class="summary-card card-red"><div class="card-label">Actual Spend</div><div class="card-value negative" id="bud-actual">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Remaining</div><div class="card-value positive" id="bud-remaining">₹0</div></div>
+        <div class="summary-card card-gold"><div class="card-label">Budget Used</div><div class="card-value gold" id="bud-pct">0%</div></div>
+      </div>
+      <!-- Budget Comparison Chart Panel -->
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-header"><span class="panel-title">Budget vs Actual Spend Comparison</span></div>
+        <div class="panel-body" style="height:220px;position:relative;padding:10px 14px;">
+          <canvas id="budgetChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="two-col" style="margin-bottom:0">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Category Budgets</span>
+            <button class="panel-action" onclick="openModal('budgetModal')">Edit Budgets</button>
+          </div>
+          <div class="panel-body" id="budget-bars">
+            <div class="empty-state"><div class="empty-icon">⊞</div>Set budgets to get started</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">This Month vs Last Month</span></div>
+          <div class="panel-body" id="budget-compare">
+            <div class="empty-state"><div class="empty-icon">⊞</div>Not enough data yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ TAX ══════════ -->
+    <div class="view" id="view-tax">
+      <div class="summary-grid g4">
+        <div class="summary-card card-gold"><div class="card-label">Gross Income</div><div class="card-value gold" id="tax-gross-d">₹0</div></div>
+        <div class="summary-card card-teal"><div class="card-label">Total Deductions</div><div class="card-value teal" id="tax-ded-d">₹0</div></div>
+        <div class="summary-card card-green"><div class="card-label">Taxable Income</div><div class="card-value positive" id="tax-txbl-d">₹0</div></div>
+        <div class="summary-card card-red"><div class="card-label">Est. Tax (Best)</div><div class="card-value negative" id="tax-best-d">₹0</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Deductions — Old Regime</span><span style="display:flex;gap:8px"><button class="panel-action" onclick="openForm16Modal()">📄 Form 16</button><button class="panel-action" onclick="openTaxModal()">Update</button></span></div>
+          <div class="panel-body">
+            <div class="tax-row"><span class="tax-key">Standard Deduction</span><span class="tax-val">₹75,000</span></div>
+            <div class="tax-row"><span class="tax-key">80C (Limit ₹1,50,000)</span><span class="tax-val positive" id="t-80c">₹0 / ₹1,50,000</span></div>
+            <div class="progress-bar" style="margin:-2px 0 8px"><div class="progress-fill" id="bar-80c" style="width:0%;background:var(--green)"></div></div>
+            <div class="tax-row"><span class="tax-key">80CCD(1B) NPS (Limit ₹50,000)</span><span class="tax-val positive" id="t-80ccd">₹0 / ₹50,000</span></div>
+            <div class="progress-bar" style="margin:-2px 0 8px"><div class="progress-fill" id="bar-80ccd" style="width:0%;background:var(--accent3)"></div></div>
+            <div class="tax-row"><span class="tax-key">24(b) Home Loan (Limit ₹2,00,000)</span><span class="tax-val" id="t-24b">₹0 / ₹2,00,000</span></div>
+            <div class="progress-bar" style="margin:-2px 0 8px"><div class="progress-fill" id="bar-24b" style="width:0%;background:var(--accent)"></div></div>
+            <div class="tax-row"><span class="tax-key">80D Medical (Limit ₹25,000)</span><span class="tax-val" id="t-80d">₹0 / ₹25,000</span></div>
+            <div class="progress-bar" style="margin:-2px 0 8px"><div class="progress-fill" id="bar-80d" style="width:0%;background:var(--accent2)"></div></div>
+            <div class="tax-row"><span class="tax-key">HRA Exemption</span><span class="tax-val" id="t-hra">₹0</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Regime Comparison</span></div>
+          <div class="panel-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div class="two-col" style="margin-bottom:0;gap:10px">
+              <div style="background:var(--surface2);border-radius:10px;padding:14px;border:1px solid rgba(181,129,58,.2)">
+                <div class="card-label">Old Regime</div>
+                <div class="card-value gold" id="old-tax" style="margin-top:6px">₹0</div>
+                <div id="old-rec" style="margin-top:8px"></div>
+              </div>
+              <div style="background:var(--surface2);border-radius:10px;padding:14px;border:1px solid var(--border)">
+                <div class="card-label">New Regime</div>
+                <div class="card-value" id="new-tax" style="margin-top:6px">₹0</div>
+              </div>
+            </div>
+            <div style="height:150px;position:relative;width:100%;">
+              <canvas id="taxChartCanvas"></canvas>
+            </div>
+            <div id="tax-verdict" class="alert alert-info" style="margin:0"><span>ℹ</span><span>Enter income to see comparison.</span></div>
+          </div>
+        </div>
+      </div>
+      <!-- Form 16 — CA Computation + Insights -->
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Form 16 — Tax Computation (CA View)</span><button class="panel-action" onclick="openForm16Modal()">Analyze Form 16</button></div>
+          <div class="panel-body" id="tax-ca-sheet">
+            <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Upload your Form 16 to generate a CA-style computation for both regimes.</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">CA Insights &amp; Action Items</span></div>
+          <div class="panel-body" id="tax-ca-insights"></div>
+        </div>
+      </div>
+      <!-- Capital Gains Panel -->
+      <div class="panel" style="margin-top:0">
+        <div class="panel-header"><span class="panel-title">Capital Gains (Investment Portfolio)</span></div>
+        <div class="panel-body" id="tax-capgains-body">
+          <div class="alert alert-info" style="margin:0"><span>ℹ</span><span>Add purchase dates to investments to see LTCG/STCG estimates.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ TRANSACTIONS ══════════ -->
+    <div class="view" id="view-transactions">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">All Transactions</span>
+          <div style="display:flex;gap:7px;align-items:center">
+            <button class="panel-action" onclick="openModal('txnModal')">+ Add</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteAllTxns()" id="del-all-txns-btn" style="font-size:11px;padding:4px 10px">&#x1F5D1; Delete All</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <!-- Filter Row 1 -->
+          <div class="search-bar">
+            <input class="search-input" id="txn-search" placeholder="&#x1F50D; Search description..." oninput="renderTxns()">
+            <select class="filter-select" id="txn-filter-cat" onchange="renderTxns()">
+              <option value="">All Categories</option>
+              <option>Food &amp; Dining</option><option>Travel</option><option>Shopping</option>
+              <option>Utilities</option><option>Entertainment</option><option>Healthcare</option>
+              <option>Education</option><option>Insurance</option><option>Investment</option>
+              <option>Salary</option><option>EMI</option><option>Family Transfer</option><option>Donation</option><option>Other</option>
+            </select>
+            <select class="filter-select" id="txn-filter-type" onchange="renderTxns()">
+              <option value="">All Types</option>
+              <option value="debit">Debits</option>
+              <option value="credit">Credits</option>
+            </select>
+            <select class="filter-select" id="txn-filter-member" onchange="renderTxns()">
+              <option value="">All Members</option>
+              <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option>
+              <option value="parents">Parents</option><option value="charan">Charan</option>
+              <option value="himaja">Himaja</option>
+            </select>
+            <select class="filter-select" id="txn-filter-account" onchange="renderTxns()">
+              <option value="">All Accounts / Cards</option>
+            </select>
+
+          </div>
+          <!-- Filter Row 2: Date Range -->
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <label style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">From</label>
+            <input type="date" class="search-input" id="txn-date-from" style="flex:0 0 140px" onchange="renderTxns()">
+            <label style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">To</label>
+            <input type="date" class="search-input" id="txn-date-to" style="flex:0 0 140px" onchange="renderTxns()">
+            <button class="btn btn-sm" onclick="resetTxnFilters()" style="font-size:11px;padding:5px 12px;white-space:nowrap">&#x21BA; Reset Filters</button>
+          </div>
+          <div id="txn-list"><div class="empty-state"><div class="empty-icon">&#8801;</div>No transactions</div></div>
+          <div id="txn-count" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ IMPORT ══════════ -->
+    <div class="view" id="view-import">
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Smart Statement Import</span></div>
+        <div class="panel-body">
+          <div class="alert alert-info" style="margin-bottom:16px"><span>ℹ</span><span>All parsing happens locally in your browser. No data is uploaded anywhere.</span></div>
+          <div style="margin-bottom:14px">
+            <div class="form-label" style="margin-bottom:7px">Select bank / card</div>
+            <div class="bank-tabs">
+              <button class="bank-tab active" onclick="selectBank('icici-salary',this)">ICICI Salary</button>
+              <button class="bank-tab" onclick="selectBank('icici-cc',this)">ICICI Credit Card</button>
+              <button class="bank-tab" onclick="selectBank('sc',this)">Standard Chartered</button>
+              <button class="bank-tab" onclick="selectBank('amex',this)">American Express</button>
+              <button class="bank-tab" onclick="selectBank('nps',this)">NPS Statement</button>
+            </div>
+          </div>
+          <div id="bank-format-info" style="margin-bottom:14px"></div>
+          <div class="form-group" style="margin-bottom:14px; max-width:250px;">
+            <input class="form-input" type="password" id="import-pdf-password" placeholder="PDF Password (if any)">
+          </div>
+          <div class="import-zone" onclick="document.getElementById('csvFile').click()">
+            <div style="font-size:24px;margin-bottom:7px">📂</div>
+            <div>Drop CSV, Excel, or PDF file or click to browse</div>
+            <div style="font-size:10px;margin-top:4px;font-family:'DM Mono',monospace;color:var(--muted)" id="import-hint">Select a bank above, then upload</div>
+          </div>
+          <input type="file" id="csvFile" accept=".csv,.CSV,.xls,.xlsx,.pdf" style="display:none" onchange="parseCSV(event)">
+          <div id="parse-result" style="margin-top:16px;display:none">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="font-family:'Lora',serif;font-size:14px">Preview</span>
+                <span id="parse-status-badge"></span>
+              </div>
+              <button class="btn btn-primary btn-sm" id="importConfirmBtn" onclick="confirmImport()">Import All</button>
+            </div>
+            <div class="parse-preview" id="parse-preview-table"></div>
+            <div style="margin-top:8px;font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="parse-summary"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- ══════════════ MODALS ══════════════ -->
+
+<!-- Account Modal -->
+<div class="modal-backdrop" id="accModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('accModal')">×</button>
+    <div class="modal-title" id="accModalTitle">Add Bank Account</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Bank &amp; Account Name</label><input class="form-input" id="m-acc-name" placeholder="e.g. ICICI Salary Account"></div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-acc-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Account Type</label>
+        <select class="form-select" id="m-acc-type">
+          <option>Salary</option><option>Savings</option><option>Current</option><option>FD</option><option>RD</option>
+        </select>
+      </div>
+      <div class="form-group form-full"><label class="form-label">Balance (₹)</label><input class="form-input" id="m-acc-bal" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Monthly Credits (₹)</label><input class="form-input" id="m-acc-in" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Monthly Debits (₹)</label><input class="form-input" id="m-acc-out" type="number" placeholder="0"></div>
+    </div>
+    <input type="hidden" id="m-acc-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('accModal')">Cancel</button><button class="btn btn-primary" onclick="saveAcc()">Save</button></div>
+  </div>
+</div>
+
+<!-- Card Modal -->
+<div class="modal-backdrop" id="cardModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('cardModal')">×</button>
+    <div class="modal-title" id="cardModalTitle">Add Credit Card</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Card Name</label><input class="form-input" id="m-card-name" placeholder="e.g. Amex Gold Card"></div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-card-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Outstanding (₹)</label><input class="form-input" id="m-card-out" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Credit Limit (₹)</label><input class="form-input" id="m-card-lim" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" id="m-card-due" type="date"></div>
+      <div class="form-group"><label class="form-label">Min Due (₹)</label><input class="form-input" id="m-card-min" type="number" placeholder="0"></div>
+    </div>
+    <input type="hidden" id="m-card-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('cardModal')">Cancel</button><button class="btn btn-primary" onclick="saveCard()">Save</button></div>
+  </div>
+</div>
+
+<!-- Reward Modal -->
+<div class="modal-backdrop" id="rewardModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('rewardModal')">×</button>
+    <div class="modal-title" id="rewardModalTitle">Add Reward Program</div>
+    <div class="form-grid">
+      <div class="form-group form-full">
+        <label class="form-label">Card / Program Name</label>
+        <input class="form-input" id="m-rw-name" list="rw-card-names" placeholder="e.g. Amex Gold, ICICI Coral">
+        <datalist id="rw-card-names"></datalist>
+      </div>
+      <div class="form-group form-full">
+        <label class="form-label">Issuer / Program Type</label>
+        <select class="form-select" id="m-rw-prog">
+          <optgroup label="American Express">
+            <option value="amex-platinum-reserve">Amex Platinum Reserve</option>
+            <option value="amex">Amex (other cards)</option>
+          </optgroup>
+          <optgroup label="ICICI Bank">
+            <option value="icici-emeralde">ICICI Emeralde Private Metal</option>
+            <option value="icici">ICICI (other cards)</option>
+          </optgroup>
+          <optgroup label="Other Banks">
+            <option value="hdfc">HDFC Bank</option>
+            <option value="sc">Standard Chartered</option>
+            <option value="axis">Axis Bank</option>
+            <option value="sbi">SBI Card</option>
+            <option value="kotak">Kotak Mahindra</option>
+            <option value="default">Other / Unknown</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Points Balance</label><input class="form-input" id="m-rw-pts" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Value per Point (₹)</label><input class="form-input" id="m-rw-rate" type="number" step="0.01" placeholder="0.25"></div>
+      <div class="form-group"><label class="form-label">Expiry Date</label><input class="form-input" id="m-rw-exp" type="date"></div>
+      <div class="form-group"><label class="form-label">Tier / Status</label><input class="form-input" id="m-rw-tier" type="text" placeholder="Green / Gold / Platinum"></div>
+    </div>
+    <input type="hidden" id="m-rw-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('rewardModal')">Cancel</button><button class="btn btn-primary" onclick="saveReward()">Save</button></div>
+  </div>
+</div>
+
+<!-- Property Modal -->
+<div class="modal-backdrop" id="propModal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('propModal')">×</button>
+    <div class="modal-title" id="propModalTitle">Add Property</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Property Name / Description</label><input class="form-input" id="m-prop-name" placeholder="e.g. Flat 3B, Prestige Towers, Hyderabad"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-prop-type">
+          <option value="flat">Residential Flat</option><option value="house">Independent House / Villa</option><option value="plot">Plot / Land</option><option value="commercial">Commercial</option><option value="agri">Agricultural</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Owner / Member</label>
+        <select class="form-select" id="m-prop-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint (All)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Location / City</label><input class="form-input" id="m-prop-location" placeholder="e.g. Hyderabad, Vijayawada"></div>
+      <div class="form-group"><label class="form-label">Purchase Price (₹)</label><input class="form-input" id="m-prop-cost" type="number" placeholder="0"></div>
+      <div class="form-group">
+        <label class="form-label">Current Market Value (₹)</label>
+        <div style="display:flex;gap:6px">
+          <input class="form-input" id="m-prop-val" type="number" placeholder="0" style="flex:1">
+          <button class="btn btn-sm" type="button" onclick="estimatePropValue()" title="Estimate from purchase price + date + city appreciation rate" style="white-space:nowrap">Estimate</button>
+        </div>
+        <div id="prop-val-note" style="font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Purchase Date</label><input class="form-input" id="m-prop-date" type="date"></div>
+      <div class="form-group"><label class="form-label">Area (sq.ft)</label><input class="form-input" id="m-prop-area" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Property Tax (₹/year)</label><input class="form-input" id="m-prop-tax" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Property Tax Due Date</label><input class="form-input" id="m-prop-taxdue" type="date"></div>
+      <div class="form-group form-full">
+        <label class="form-label">Linked Loans (check all loans tied to this property)</label>
+        <div id="m-prop-loans-list" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;padding:8px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--muted);padding:4px 2px">No loans found.</div>
+        </div>
+      </div>
+      <div class="form-group form-full"><label class="form-label">Notes (Registration No, Document details)</label><input class="form-input" id="m-prop-notes" placeholder="e.g. Reg No: TS-1234, Doc 5678"></div>
+    </div>
+    <input type="hidden" id="m-prop-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('propModal')">Cancel</button><button class="btn btn-primary" onclick="saveProp()">Save Property</button></div>
+  </div>
+</div>
+
+<!-- Loan Modal -->
+<div class="modal-backdrop" id="loanModal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('loanModal')">×</button>
+    <div class="modal-title" id="loanModalTitle">Add Loan</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Loan Name / Description</label><input class="form-input" id="m-loan-name" placeholder="e.g. HDFC Home Loan"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-loan-type">
+          <option value="home">Home Loan</option><option value="car">Car Loan</option><option value="personal">Personal Loan</option><option value="education">Education Loan</option><option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-loan-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Lender / Bank</label><input class="form-input" id="m-loan-lender" placeholder="e.g. HDFC, SBI, ICICI"></div>
+      <div class="form-group"><label class="form-label">Principal Amount (₹)</label><input class="form-input" id="m-loan-principal" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Outstanding Balance (₹)</label><input class="form-input" id="m-loan-outstanding" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">EMI Amount (₹)</label><input class="form-input" id="m-loan-emi" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Interest Rate (% p.a.)</label><input class="form-input" id="m-loan-rate" type="number" step="0.01" placeholder="8.5"></div>
+      <div class="form-group"><label class="form-label">EMI Date (day of month)</label><input class="form-input" id="m-loan-emiday" type="number" min="1" max="31" placeholder="5"></div>
+      <div class="form-group"><label class="form-label">Tenure Remaining (months)</label><input class="form-input" id="m-loan-tenure" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Annual Interest Paid (₹)</label><input class="form-input" id="m-loan-intpaid" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Loan Start Date</label><input class="form-input" id="m-loan-start" type="date"></div>
+    </div>
+    <input type="hidden" id="m-loan-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('loanModal')">Cancel</button><button class="btn btn-primary" onclick="saveLoan()">Save Loan</button></div>
+  </div>
+</div>
+
+<!-- Gold Modal -->
+<div class="modal-backdrop" id="goldModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('goldModal')">×</button>
+    <div class="modal-title" id="goldModalTitle">Add Gold / Jewellery</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Description</label><input class="form-input" id="m-gold-name" placeholder="e.g. Necklace set, Bangles, Coins"></div>
+      <div class="form-group"><label class="form-label">Member / Owner</label>
+        <select class="form-select" id="m-gold-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Form</label>
+        <select class="form-select" id="m-gold-form">
+          <option value="jewellery">Jewellery</option><option value="coin">Coins / Bars</option><option value="digital">Digital Gold / SGB</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Weight (grams)</label><input class="form-input" id="m-gold-wt" type="number" step="0.01" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Purity (carats)</label>
+        <select class="form-select" id="m-gold-purity">
+          <option value="24">24K (Pure)</option><option value="22" selected>22K</option><option value="18">18K</option><option value="14">14K</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Purchase Price (₹)</label><input class="form-input" id="m-gold-cost" type="number" placeholder="0"></div>
+      <div class="form-group form-full"><label class="form-label">Notes (e.g. stored at, occasion)</label><input class="form-input" id="m-gold-notes" placeholder="e.g. Bank locker, Wedding gift"></div>
+    </div>
+    <input type="hidden" id="m-gold-id">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('goldModal')">Cancel</button><button class="btn btn-primary" onclick="saveGold()">Save</button></div>
+  </div>
+</div>
+
+<!-- Investment Modal -->
+<div class="modal-backdrop" id="invModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('invModal')">×</button>
+    <div class="modal-title" id="invModalTitle">Add Investment</div>
+    <input type="hidden" id="m-inv-id">
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Name</label><input class="form-input" id="m-inv-name" placeholder="e.g. Axis Bluechip Fund"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-inv-type" onchange="toggleEsopFields()">
+          <option>Mutual Fund</option><option>Stock</option><option>Fixed Deposit</option><option>PPF</option><option>SGB</option><option>ESOP</option><option>RSU</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-inv-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Currency</label>
+        <select class="form-select" id="m-inv-currency" onchange="toggleCurrencyFields()">
+          <option value="INR">₹ INR — Indian Rupee</option>
+          <option value="USD">$ USD — US Dollar</option>
+          <option value="EUR">€ EUR — Euro</option>
+          <option value="GBP">£ GBP — British Pound</option>
+          <option value="SGD">S$ SGD — Singapore Dollar</option>
+          <option value="AED">AED — UAE Dirham</option>
+          <option value="JPY">¥ JPY — Japanese Yen</option>
+          <option value="AUD">A$ AUD — Australian Dollar</option>
+          <option value="CAD">C$ CAD — Canadian Dollar</option>
+        </select>
+      </div>
+      <div class="form-group" id="inv-fx-rate-group" style="display:none">
+        <label class="form-label">Exchange Rate (1 unit = ₹)</label>
+        <input class="form-input" id="m-inv-fx-rate" type="number" step="0.01" placeholder="e.g. 85 for USD">
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">How many ₹ equals 1 unit of selected currency</div>
+      </div>
+      <div class="form-group" id="inv-cost-group"><label class="form-label" id="inv-cost-label">Invested (₹)</label><input class="form-input" id="m-inv-cost" type="number" placeholder="0"></div>
+      <div class="form-group" id="inv-val-group"><label class="form-label" id="inv-val-label">Current Value (₹)</label><input class="form-input" id="m-inv-val" type="number" placeholder="0"></div>
+      <div class="form-group" id="inv-purchase-date-group"><label class="form-label">Purchase Date <span style="font-size:10px;color:var(--muted)">(for LTCG/STCG)</span></label><input class="form-input" id="m-inv-purchase-date" type="date"></div>
+      <!-- ESOP / RSU fields — shown only when type is ESOP or RSU -->
+      <div id="esop-fields" style="display:none;grid-column:1/-1">
+        <div style="font-size:11px;color:var(--muted);margin:4px 0 10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border);padding-top:12px">Vesting Details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+          <div class="form-group"><label class="form-label">Grant Date</label><input class="form-input" id="m-inv-grant-date" type="date"></div>
+          <div class="form-group"><label class="form-label">Total Units Granted</label><input class="form-input" id="m-inv-units" type="number" placeholder="e.g. 500"></div>
+          <div class="form-group"><label class="form-label" id="inv-grant-price-label">Grant / Strike Price (₹/unit)</label><input class="form-input" id="m-inv-grant-price" type="number" placeholder="0 for RSUs"></div>
+          <div class="form-group"><label class="form-label" id="inv-cur-price-label">Current Price (₹/unit)</label><input class="form-input" id="m-inv-cur-price" type="number" placeholder="Latest valuation"></div>
+          <div class="form-group"><label class="form-label">Vesting Period (months)</label><input class="form-input" id="m-inv-vest-months" type="number" placeholder="48" value="48"></div>
+          <div class="form-group"><label class="form-label">Cliff Period (months)</label><input class="form-input" id="m-inv-cliff" type="number" placeholder="12" value="12"></div>
+          <div class="form-group" style="grid-column:1/-1"><label class="form-label">Vesting Frequency</label>
+            <select class="form-select" id="m-inv-vest-freq">
+              <option value="monthly">Monthly</option>
+              <option value="quarterly" selected>Quarterly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('invModal')">Cancel</button><button class="btn btn-primary" onclick="saveInv()">Save</button></div>
+  </div>
+</div>
+
+<!-- Insurance Modal -->
+<div class="modal-backdrop" id="insModal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('insModal')">×</button>
+    <div class="modal-title" id="insModalTitle">Add Insurance Policy</div>
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Policy Name</label><input class="form-input" id="m-ins-name" placeholder="e.g. HDFC Life Click2Protect"></div>
+      <div class="form-group"><label class="form-label">Insurer</label><input class="form-input" id="m-ins-insurer" placeholder="e.g. HDFC Life"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-ins-type" onchange="insTypeChanged()">
+          <option value="life">Life Insurance</option><option value="health">Health Insurance</option><option value="auto">Auto Insurance</option><option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Policy Number</label><input class="form-input" id="m-ins-polno" placeholder="POL-XXXXXXXX"></div>
+      
+      <div class="form-group"><label class="form-label">Sum Assured / Cover (₹)</label><input class="form-input" id="m-ins-cover" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Premium Amount (₹)</label><input class="form-input" id="m-ins-premium" type="number" placeholder="0"></div>
+      
+      <div class="form-group"><label class="form-label">Start Year</label><input class="form-input" id="m-ins-start" type="number" placeholder="YYYY"></div>
+      <div class="form-group"><label class="form-label">End Year</label><input class="form-input" id="m-ins-end" type="number" placeholder="YYYY"></div>
+
+      <div class="form-group"><label class="form-label">Premium Due Date</label><input class="form-input" id="m-ins-due" type="date"></div>
+      <div class="form-group"><label class="form-label">Frequency</label>
+        <select class="form-select" id="m-ins-freq"><option value="annual">Annual</option><option value="half-yearly">Half-Yearly</option><option value="quarterly">Quarterly</option><option value="monthly">Monthly</option><option value="single">Single</option></select>
+      </div>
+      
+      <div class="form-group"><label class="form-label">Nominee Name</label><input class="form-input" id="m-ins-nominee" placeholder="e.g. Sailaja"></div>
+      <div class="form-group"><label class="form-label">Nominee Relation</label><input class="form-input" id="m-ins-nom-rel" placeholder="e.g. Wife"></div>
+
+      <div class="form-group form-full"><label class="form-label">Member Owner</label>
+        <select class="form-select" id="m-ins-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint/Family</option>
+        </select>
+      </div>
+      <div class="form-group form-full" id="ins-covered-wrap">
+        <label class="form-label">Members Covered (comma separated)</label>
+        <input class="form-input" id="m-ins-covered" placeholder="e.g. Madhu, Sailaja">
+      </div>
+      <div class="form-group form-full" id="ins-vehicle-wrap" style="display:none">
+        <label class="form-label">Vehicle Registration</label>
+        <input class="form-input" id="m-ins-vehicle" placeholder="e.g. TS09AB1234">
+      </div>
+      <div class="form-group form-full">
+        <label class="form-label">Notes (Riders/Exclusions)</label>
+        <input class="form-input" id="m-ins-notes" placeholder="e.g. Accidental rider 10L">
+      </div>
+    </div>
+    <input type="hidden" id="m-ins-id">
+    <input type="hidden" id="m-ins-source">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('insModal')">Cancel</button><button class="btn btn-primary" onclick="saveIns()">Save Policy</button></div>
+  </div>
+</div>
+
+<!-- Txn Scanner Modal -->
+<div class="modal-backdrop" id="txnScanModal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('txnScanModal')">×</button>
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:24px">🔍</span> Scan from Transactions
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">
+      We scanned your bank statements for insurance premium payments. Select the ones you want to add as policies.
+    </div>
+    <div id="txn-ins-list" style="display:flex;flex-direction:column;gap:12px;max-height:400px;overflow-y:auto;margin-bottom:16px">
+      <!-- Injected list -->
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('txnScanModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveScannedTxns()">Add Selected Policies</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI Policy Scanner Modal -->
+<div class="modal-backdrop" id="aiInsModal">
+  <div class="modal modal-lg" style="max-width:600px">
+    <button class="modal-close" onclick="closeModal('aiInsModal')">×</button>
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:24px;background:linear-gradient(135deg, #7b5ea7, #4a6fa5);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">✧</span>
+      AI Policy Document Scanner
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">
+      Upload your policy PDF/Image or paste policy email details. The AI engine will scan and extract the policy name, type, premium amount, coverage, and due date.
+    </div>
+    
+    <!-- Upload Area -->
+    <div class="form-group form-full" style="margin-bottom:16px">
+      <div id="ai-drag-area" style="border:2px dashed var(--border);border-radius:8px;padding:30px;text-align:center;background:rgba(255,255,255,0.02);cursor:pointer;transition:all 0.3s;" ondragover="event.preventDefault();this.style.borderColor='var(--accent)';" ondragleave="this.style.borderColor='var(--border)';" ondrop="handlePolicyDrop(event)" onclick="document.getElementById('ai-policy-file').click();">
+        <div style="font-size:32px;margin-bottom:8px">📄</div>
+        <div style="font-weight:600;margin-bottom:4px">Drag & drop your policy PDF or Image here</div>
+        <div style="font-size:11px;color:var(--muted)">or click to select file from computer</div>
+        <input type="file" id="ai-policy-file" style="display:none" onchange="handlePolicySelect(event)">
+        <div id="ai-file-name" style="margin-top:10px;font-size:12px;color:#7b5ea7;font-weight:600;display:none"></div>
+      </div>
+    </div>
+    
+    <!-- Text area for pasting copy -->
+    <div class="form-group form-full" style="margin-bottom:16px">
+      <label class="form-label">Or Paste Email Copy / Raw Policy Text</label>
+      <textarea class="form-input" id="ai-policy-text" rows="5" placeholder="Paste policy details..." style="resize:vertical;font-family:inherit;line-height:1.4"></textarea>
+    </div>
+
+    <!-- AI Scan Progress Screen (Hidden initially) -->
+    <div id="ai-scan-progress" style="display:none;text-align:center;padding:20px 0;">
+      <div class="glowing-spinner" style="width:40px;height:40px;border:3px solid rgba(123,94,167,0.1);border-top:3px solid #7b5ea7;border-radius:50%;margin:0 auto 15px auto;"></div>
+      <div id="ai-progress-status" style="font-weight:600;margin-bottom:6px">Analyzing document structure...</div>
+      <div id="ai-progress-sub" style="font-size:11px;color:var(--muted)">Checking metadata...</div>
+    </div>
+    
+    <!-- AI Results Screen (Hidden initially) -->
+    <div id="ai-scan-results" style="display:none;border:1px solid rgba(123,94,167,0.2);border-radius:8px;padding:16px;background:rgba(123,94,167,0.02);margin-bottom:16px;max-height:50vh;overflow-y:auto">
+      <div style="font-weight:700;color:#7b5ea7;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:16px">✓</span> AI Extraction Completed!
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Policy Name</label><input class="form-input" id="ai-res-name"></div>
+        <div class="form-group"><label class="form-label">Insurer</label><input class="form-input" id="ai-res-insurer"></div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="ai-res-type" onchange="aiResTypeChanged()">
+            <option value="life">Life</option><option value="health">Health</option><option value="auto">Auto</option><option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Sum Assured (₹)</label><input class="form-input" id="ai-res-cover" type="number"></div>
+        <div class="form-group"><label class="form-label">Premium (₹)</label><input class="form-input" id="ai-res-premium" type="number"></div>
+        <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" id="ai-res-due" type="date"></div>
+        <div class="form-group"><label class="form-label">Nominee Name</label><input class="form-input" id="ai-res-nominee"></div>
+        <div class="form-group"><label class="form-label">Nominee Relation</label><input class="form-input" id="ai-res-nom-rel"></div>
+        <div class="form-group"><label class="form-label">Policy Number</label><input class="form-input" id="ai-res-polno"></div>
+        <div class="form-group"><label class="form-label">Covered Members</label><input class="form-input" id="ai-res-extra"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('aiInsModal')">Cancel</button>
+      <button class="btn btn-primary" id="ai-scan-btn" onclick="startAIScan()" style="background:linear-gradient(135deg, #7b5ea7, #4a6fa5);border:none;color:white">✧ Scan with AI</button>
+      <button class="btn btn-primary" id="ai-save-btn" onclick="saveAIResults()" style="display:none;background:var(--green)">Approve & Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- EPF Modal -->
+<div class="modal-backdrop" id="epfModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('epfModal')">×</button>
+    <div class="modal-title">Update EPF</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">UAN</label><input class="form-input" id="m-epf-uan" placeholder="Universal Account Number"></div>
+      <div class="form-group"><label class="form-label">Total Balance (₹)</label><input class="form-input" id="m-epf-bal" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Employee Share (₹)</label><input class="form-input" id="m-epf-emp" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Employer Share (₹)</label><input class="form-input" id="m-epf-er" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Monthly Contribution (₹)</label><input class="form-input" id="m-epf-monthly" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Birth Year <span style="font-size:10px;color:var(--muted)">(for projection)</span></label><input class="form-input" id="m-epf-birthyear" type="number" placeholder="e.g. 1990" min="1940" max="2005"></div>
+      <div class="form-group"><label class="form-label">Target Retirement Age</label><input class="form-input" id="m-epf-retire-age" type="number" placeholder="60" value="60" min="50" max="70"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('epfModal')">Cancel</button><button class="btn btn-primary" onclick="saveEPF()">Save</button></div>
+  </div>
+</div>
+
+<!-- Gratuity Modal -->
+<div class="modal-backdrop" id="gratModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('gratModal')">×</button>
+    <div class="modal-title">Update Gratuity</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Employer / Company Name</label><input class="form-input" id="m-grat-employer" placeholder="e.g. Infosys Ltd"></div>
+      <div class="form-group"><label class="form-label">Date of Joining</label><input class="form-input" id="m-grat-date" type="date"></div>
+      <div class="form-group"><label class="form-label">Basic + DA (₹/month)</label><input class="form-input" id="m-grat-basic" type="number" placeholder="0"><div style="font-size:10px;color:var(--muted);margin-top:4px">Used in formula: Basic+DA × 15/26 × yrs</div></div>
+      <div class="form-group form-full"><label class="form-label">Actual Accrued from Payslip / Portal (₹, optional)</label><input class="form-input" id="m-grat-actual" type="number" placeholder="Leave blank to use computed value"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('gratModal')">Cancel</button><button class="btn btn-primary" onclick="saveGratuity()">Save</button></div>
+  </div>
+</div>
+
+<!-- NPS Modal -->
+<div class="modal-backdrop" id="npsModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('npsModal')">×</button>
+    <div class="modal-title">Update NPS</div>
+    <div class="form-grid">
+      <div class="form-group form-full">
+        <label class="form-label">Family Member</label>
+        <select class="form-select" id="m-nps-member" onchange="populateNpsForm()">
+          <option value="madhu">Madhu</option>
+          <option value="sailaja">Sailaja</option>
+          <option value="parents">Parents</option>
+          <option value="charan">Charan</option>
+          <option value="himaja">Himaja</option>
+        </select>
+      </div>
+      <div class="form-group form-full"><label class="form-label">PRAN</label><input class="form-input" id="m-nps-pran" placeholder="Permanent Retirement Account Number"></div>
+      <div class="form-group"><label class="form-label">Tier I Balance (₹)</label><input class="form-input" id="m-nps-t1" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Tier II Balance (₹)</label><input class="form-input" id="m-nps-t2" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">FY Contribution (₹)</label><input class="form-input" id="m-nps-contrib" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Monthly SIP (₹)</label><input class="form-input" id="m-nps-sip" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Equity % (Tier I)</label><input class="form-input" id="m-nps-eq" type="number" placeholder="75"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('npsModal')">Cancel</button><button class="btn btn-primary" onclick="saveNPS()">Save</button></div>
+  </div>
+</div>
+
+<!-- Tax Modal -->
+<div class="modal-backdrop" id="taxModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('taxModal')">×</button>
+    <div class="modal-title">Update Tax Details</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Annual Gross Income (₹)</label><input class="form-input" id="m-tax-gross" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80C (₹)</label><input class="form-input" id="m-tax-80c" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80CCD(1B) NPS (₹)</label><input class="form-input" id="m-tax-nps" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">24(b) Home Loan (₹)</label><input class="form-input" id="m-tax-hl" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80D Medical (₹)</label><input class="form-input" id="m-tax-80d" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">HRA Exemption (₹)</label><input class="form-input" id="m-tax-hra" type="number" placeholder="0"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('taxModal')">Cancel</button><button class="btn btn-primary" onclick="saveTax()">Calculate</button></div>
+  </div>
+</div>
+
+<!-- Form 16 Analyzer Modal -->
+<div class="modal-backdrop" id="form16Modal">
+  <div class="modal" style="max-width:640px">
+    <button class="modal-close" onclick="closeModal('form16Modal')">×</button>
+    <div class="modal-title">Form 16 Analyzer</div>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Upload your Form 16 (Part B) PDF to auto-extract figures, or enter them manually. Review everything before saving — Form 16 layouts vary by employer.</div>
+
+    <label for="f16-file" class="btn btn-primary" style="display:inline-block;cursor:pointer;margin-bottom:8px">📄 Upload Form 16 PDF</label>
+    <input id="f16-file" type="file" accept="application/pdf" style="display:none" onchange="handleForm16Upload(this)">
+    <div id="f16-parse-status" style="margin-bottom:12px"></div>
+
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Employer</label><input class="form-input" id="f16-employer" placeholder="Company name"></div>
+      <div class="form-group"><label class="form-label">TAN</label><input class="form-input" id="f16-tan" placeholder="ABCD12345E"></div>
+      <div class="form-group"><label class="form-label">Assessment Year</label><input class="form-input" id="f16-ay" placeholder="2026-27"></div>
+      <div class="form-group"><label class="form-label">Gross Salary §17 (₹)</label><input class="form-input" id="f16-gross" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">HRA Exemption §10(13A) (₹)</label><input class="form-input" id="f16-hra" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Other §10 Exemptions / LTA (₹)</label><input class="form-input" id="f16-exempt" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Professional Tax §16(iii) (₹)</label><input class="form-input" id="f16-proftax" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80C (₹)</label><input class="form-input" id="f16-80c" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80CCD(1B) NPS (₹)</label><input class="form-input" id="f16-80ccd1b" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80CCD(2) Employer NPS (₹)</label><input class="form-input" id="f16-80ccd2" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80D Medical (₹)</label><input class="form-input" id="f16-80d" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">24(b) Home Loan Interest (₹)</label><input class="form-input" id="f16-24b" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80E Education Loan (₹)</label><input class="form-input" id="f16-80e" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80G Donations (₹)</label><input class="form-input" id="f16-80g" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">80TTA/TTB Interest (₹)</label><input class="form-input" id="f16-80tta" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">TDS Deducted (₹)</label><input class="form-input" id="f16-tds" type="number" placeholder="0"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('form16Modal')">Cancel</button><button class="btn btn-primary" onclick="saveForm16()">Save &amp; Analyze</button></div>
+  </div>
+</div>
+
+<!-- Transaction Modal -->
+<div class="modal-backdrop" id="txnModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('txnModal')">×</button>
+    <div class="modal-title">Add Transaction</div>
+    <div class="form-grid">
+      <div class="form-group form-full"><label class="form-label">Description</label><input class="form-input" id="m-txn-desc" placeholder="e.g. Swiggy dinner"></div>
+      <div class="form-group"><label class="form-label">Amount (₹)</label><input class="form-input" id="m-txn-amt" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="m-txn-type"><option value="debit">Debit / Spend</option><option value="credit">Credit / Income</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="m-txn-cat"><option>Food &amp; Dining</option><option>Travel</option><option>Shopping</option><option>Utilities</option><option>Entertainment</option><option>Healthcare</option><option>Education</option><option>Insurance</option><option>Investment</option><option>Salary</option><option>EMI</option><option>Family Transfer</option><option>Donation</option><option>Other</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Member</label>
+        <select class="form-select" id="m-txn-member">
+          <option value="madhu">Madhu</option><option value="sailaja">Sailaja</option><option value="parents">Parents</option><option value="charan">Charan</option><option value="himaja">Himaja</option><option value="joint">Joint</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Account / Card</label>
+        <select class="form-select" id="m-txn-account">
+          <option value="">Cash / Unassigned</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="m-txn-date" type="date"></div>
+
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('txnModal')">Cancel</button><button class="btn btn-primary" onclick="saveTxn()">Add</button></div>
+  </div>
+</div>
+
+<!-- Budget Modal -->
+<div class="modal-backdrop" id="budgetModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('budgetModal')">×</button>
+    <div class="modal-title">Edit Monthly Budgets</div>
+    <div id="budget-form-rows" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px"></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('budgetModal')">Cancel</button><button class="btn btn-primary" onclick="saveBudget()">Save Budgets</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="recurringDetailModal">
+  <div class="modal" style="max-width:460px">
+    <button class="modal-close" onclick="closeModal('recurringDetailModal')">×</button>
+    <div class="modal-title">🔄 Recurring Transactions</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;margin-bottom:12px">Auto-detected from your transaction history</div>
+    <div id="recurring-detail-content" style="max-height:420px;overflow-y:auto"></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('recurringDetailModal')">Close</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="salaryHistoryModal">
+  <div class="modal" style="max-width:440px">
+    <button class="modal-close" onclick="closeModal('salaryHistoryModal')">×</button>
+    <div class="modal-title">💰 Salary History</div>
+    <div id="salary-history-content" style="margin-top:12px"></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('salaryHistoryModal')">Close</button></div>
+  </div>
+</div>
+
+<!-- FX Rates Modal -->
+<div class="modal-backdrop" id="fxModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('fxModal')">×</button>
+    <div class="modal-title">FX Rates (1 unit = ₹)</div>
+    <div class="form-grid" id="fx-rates-form" style="min-height:60px"></div>
+    <div style="font-size:11px;color:var(--muted);padding:0 0 12px">Updating rates here recomputes all global investments instantly. Rates are also auto-updated when you save an investment.</div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('fxModal')">Cancel</button><button class="btn btn-primary" onclick="saveFxRates()">Save Rates</button></div>
+  </div>
+</div>
+
+<script src="family-finance.js"></script>
+</body>
+</html>
