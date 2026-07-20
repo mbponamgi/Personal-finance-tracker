@@ -1,0 +1,31 @@
+{
+  "kind": "transactions",
+  "summary": {
+    "rowsIn": 3,
+    "valid": 3,
+    "skipped": 0
+  },
+  "transactions": [
+    {
+      "date": "2026-05-02",
+      "desc": "ATM CASH WITHDRAWAL",
+      "amount": 2000,
+      "type": "debit",
+      "cat": "Other"
+    },
+    {
+      "date": "2026-05-01",
+      "desc": "NEFT SALARY CREDIT",
+      "amount": 60000,
+      "type": "credit",
+      "cat": "Salary"
+    },
+    {
+      "date": "2026-04-30",
+      "desc": "UPI-SWIGGY BANGALORE",
+      "amount": 350,
+      "type": "debit",
+      "cat": "Food & Dining"
+    }
+  ]
+}

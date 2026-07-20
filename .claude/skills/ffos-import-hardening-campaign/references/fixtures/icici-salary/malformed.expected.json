@@ -1,0 +1,24 @@
+{
+  "kind": "transactions",
+  "summary": {
+    "rowsIn": 4,
+    "valid": 2,
+    "skipped": 2
+  },
+  "transactions": [
+    {
+      "date": "2026-05-03",
+      "desc": "Uber",
+      "amount": 250,
+      "type": "debit",
+      "cat": "Travel"
+    },
+    {
+      "date": "2026-04-30",
+      "desc": "Zomato",
+      "amount": 500,
+      "type": "debit",
+      "cat": "Food & Dining"
+    }
+  ]
+}

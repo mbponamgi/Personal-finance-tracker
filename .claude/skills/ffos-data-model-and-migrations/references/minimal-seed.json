@@ -1,0 +1,44 @@
+{
+  "accounts": [
+    { "id": 1001, "name": "ICICI Salary", "member": "madhu", "type": "Salary", "balance": 250000, "credits": 0, "debits": 0, "updated": "01 Jul 2026" },
+    { "id": 1002, "name": "SC Savings", "member": "sailaja", "type": "Savings", "balance": 80000, "credits": 0, "debits": 0, "updated": "01 Jul 2026" }
+  ],
+  "cards": [
+    { "id": 2001, "name": "Amex Platinum", "member": "madhu", "outstanding": 15000, "limit": 500000, "dueDate": "2026-07-28", "minDue": 750 }
+  ],
+  "rewards": [
+    { "id": 3001, "name": "American Express", "program": "amex", "points": 12000, "rate": 0.25, "expiry": "", "tier": "" }
+  ],
+  "investments": [
+    { "id": 4001, "name": "Nifty 50 Index Fund", "type": "Mutual Fund", "member": "madhu", "currency": "INR", "exchangeRate": 1, "costFX": 100000, "valueFX": 130000, "cost": 100000, "value": 130000, "purchaseDate": "2024-04-01" }
+  ],
+  "insurance": [
+    { "id": 5001, "name": "STAR HEALTH Policy", "type": "health", "insurer": "STAR HEALTH", "polno": "SH123", "member": "joint", "cover": 1000000, "premium": 24000, "startYear": 2024, "endYear": "", "dueDate": "2026-09-01", "freq": "annual", "nominee": "Sailaja", "nomineeRel": "spouse", "covered": ["Madhu", "Sailaja"], "vehicle": "", "notes": "", "source": "manual" }
+  ],
+  "properties": [
+    { "id": 6001, "name": "Hyderabad Flat", "type": "flat", "member": "joint", "location": "Hyderabad", "cost": 6000000, "value": 8000000, "purchaseDate": "2020-01-15", "area": 1500, "propTax": 12000, "propTaxDue": "2026-10-31", "linkedLoans": [7001], "notes": "" }
+  ],
+  "loans": [
+    { "id": 7001, "name": "HDFC Home", "type": "home", "member": "joint", "lender": "HDFC", "principal": 4000000, "outstanding": 2500000, "emi": 42000, "rate": 8.5, "emiDay": 5, "tenure": 240, "intPaid": 180000, "startDate": "2020-02-01" }
+  ],
+  "dismissedAutoLoans": [],
+  "gold": [
+    { "id": 8001, "name": "Wedding bangles", "member": "sailaja", "form": "jewellery", "weight": 40, "purity": 22, "cost": 180000, "notes": "" }
+  ],
+  "goldRate": 7500,
+  "fxRates": {},
+  "epf": { "uan": "100200300400", "balance": 900000, "empShare": 450000, "erShare": 450000, "monthly": 12000, "updated": "01 Jul 2026", "birthYear": 1988, "retireAge": 60 },
+  "gratuity": { "employer": "Acme India", "joiningDate": "2018-06-01", "basicDA": 80000, "actualAccrued": 0 },
+  "nps": {
+    "madhu": { "pran": "110012345678", "tier1": 400000, "tier2": 0, "fyContrib": 50000, "monthly": 5000, "equityPct": 75 }
+  },
+  "tax": {
+    "madhu": { "gross": 3000000, "s80c": 150000, "s80ccd": 50000, "s24b": 200000, "s80d": 25000, "hra": 0 }
+  },
+  "transactions": [
+    { "id": 9002, "desc": "SALARY JULY NEFT CR", "amount": 200000, "type": "credit", "cat": "Salary", "member": "madhu", "date": "2026-07-01", "account": 1001 },
+    { "id": 9001, "desc": "SWIGGY BANGALORE", "amount": 540, "type": "debit", "cat": "Food & Dining", "member": "madhu", "date": "2026-06-28", "account": 2001 }
+  ],
+  "budgets": { "Food & Dining": 15000, "EMI": 42000 },
+  "nwHistory": []
+}
